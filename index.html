@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solar Panel Roof Simulation</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./node_modules/three/build/three.module.js",
+      "three/addons/": "./node_modules/three/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <!-- Fixed restore tabs (visible only when respective panel is collapsed) -->
+  <button class="panel-restore-btn panel-restore-left" id="restoreLeft" title="Show controls">&#x25BA;</button>
+  <button class="panel-restore-btn panel-restore-right" id="restoreRight" title="Show energy output">&#x25C4;</button>
+
+  <!-- Left Control Panel -->
+  <div class="panel panel-left" id="controlPanel">
+    <div class="panel-header">
+      <span class="panel-icon">&#x2600;&#xFE0F;</span>
+      <h2>Solar Simulation</h2>
+      <div class="header-actions">
+        <button class="header-btn" id="settingsBtn" title="Settings">&#x2699;&#xFE0F;</button>
+        <button class="header-btn home-btn" id="homeBtn" title="Back to project selection">&#x1F3E0;</button>
+        <button class="collapse-btn" id="collapseLeft">&#x25C4;</button>
+      </div>
+    </div>
+
+    <!-- Roof Type Selector -->
+    <section class="section">
+      <h3>Roof Type</h3>
+      <div class="roof-selector">
+        <button class="roof-btn active" data-roof="flat">
+          <span class="roof-icon">&#x1F7E6;</span>
+          <span>Flat</span>
+        </button>
+        <button class="roof-btn" data-roof="gable">
+          <span class="roof-icon">&#x1F3E0;</span>
+          <span>Gable</span>
+        </button>
+        <button class="roof-btn" data-roof="hip">
+          <span class="roof-icon">&#x2B21;</span>
+          <span>Hip</span>
+        </button>
+        <button class="roof-btn" data-roof="pyramid">
+          <span class="roof-icon">&#x25B3;</span>
+          <span>Pyramid</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Building Dimensions -->
+    <section class="section">
+      <h3>Building Dimensions</h3>
+      <div class="control-row">
+        <label>Width</label>
+        <div class="slider-group">
+          <input type="range" id="houseWidth" min="5" max="20" value="10" step="0.5">
+          <span class="value-display" id="houseWidthVal">10.0m</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <label>Depth</label>
+        <div class="slider-group">
+          <input type="range" id="houseDepth" min="5" max="20" value="10" step="0.5">
+          <span class="value-display" id="houseDepthVal">10.0m</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <label>Wall Height</label>
+        <div class="slider-group">
+          <input type="range" id="wallHeight" min="2" max="6" value="3" step="0.25">
+          <span class="value-display" id="wallHeightVal">3.00m</span>
+        </div>
+      </div>
+      <div class="control-row disabled" id="ridgeLengthRow">
+        <label>Ridge Length</label>
+        <div class="slider-group">
+          <input type="range" id="ridgeLength" min="2" max="8" value="4" step="0.5">
+          <span class="value-display" id="ridgeLengthVal">4.0m</span>
+        </div>
+      </div>
+      <div class="control-row" id="pitchAngleRow">
+        <label>Pitch Angle</label>
+        <div class="slider-group">
+          <input type="range" id="roofPitch" min="5" max="60" value="30" step="1">
+          <span class="value-display" id="roofPitchVal">30&#xB0;</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <label>Rotation</label>
+        <div class="slider-group">
+          <input type="range" id="buildingRotation" min="0" max="359" value="0" step="1">
+          <span class="value-display" id="buildingRotationVal">0&#xB0;</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Time Control -->
+    <section class="section">
+      <h3>Time &amp; Date</h3>
+      <div class="control-row">
+        <label>Date</label>
+        <input type="date" id="simDate" class="date-input">
+      </div>
+      <div class="control-row">
+        <label>Time</label>
+        <div class="slider-group">
+          <input type="range" id="simTime" min="0" max="24" value="12" step="0.1">
+          <span class="value-display" id="simTimeVal">12:00</span>
+        </div>
+      </div>
+      <div class="control-row">
+        <label>Speed</label>
+        <div class="slider-group">
+          <input type="range" id="simSpeed" min="1" max="100" value="60" step="1">
+          <span class="value-display" id="simSpeedVal">60x</span>
+        </div>
+      </div>
+      <div class="toggle-row">
+        <label>Auto Advance</label>
+        <label class="toggle">
+          <input type="checkbox" id="autoAdvance" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="daylight-row">
+        <span class="daylight-label" title="Sunrise">&#x1F305; <span id="sunriseTime">--:--</span></span>
+        <span class="daylight-bar">
+          <span class="daylight-fill" id="daylightFill"></span>
+          <span class="daylight-marker" id="daylightMarker"></span>
+        </span>
+        <span class="daylight-label" title="Sunset">&#x1F307; <span id="sunsetTime">--:--</span></span>
+      </div>
+    </section>
+
+    <!-- Solar Panel Settings -->
+    <section class="section">
+      <h3>Solar Panels</h3>
+
+      <!-- Flat-roof layout options (hidden for non-flat roofs) -->
+      <div id="flatRoofOptions" style="display:none">
+        <div class="placement-toggle">
+          <span class="toggle-label">Layout</span>
+          <div class="placement-pills">
+            <button class="layout-btn active" data-layout="south">&#x2600; South</button>
+            <button class="layout-btn" data-layout="east-west">&#x21C4; E / W</button>
+          </div>
+        </div>
+        <div class="control-row" id="panelTiltRow">
+          <label>Tilt Angle</label>
+          <div class="slider-group">
+            <input type="range" id="panelTilt" min="0" max="45" value="15" step="1">
+            <span class="value-display" id="panelTiltVal">15&#xB0;</span>
+          </div>
+        </div>
+      </div>
+      <!-- Panel customization (always visible) -->
+      <div id="customizePanel">
+        <div class="control-row">
+          <label>Panel Width</label>
+          <div class="slider-group">
+            <input type="range" id="panelWidth" min="0.5" max="1.5" value="1.0" step="0.05">
+            <span class="value-display" id="panelWidthVal">1.00m</span>
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Panel Height</label>
+          <div class="slider-group">
+            <input type="range" id="panelHeight" min="0.8" max="2.5" value="1.65" step="0.05">
+            <span class="value-display" id="panelHeightVal">1.65m</span>
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Nominal Power</label>
+          <div class="slider-group">
+            <input type="range" id="panelNominalWp" min="150" max="600" value="440" step="5">
+            <span class="value-display" id="panelNominalWpVal">440 Wp</span>
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Panel Gap</label>
+          <div class="slider-group">
+            <input type="range" id="panelGap" min="0.02" max="0.3" value="0.1" step="0.01">
+            <span class="value-display" id="panelGapVal">0.10m</span>
+          </div>
+        </div>
+        <!-- Panel orientation toggle -->
+        <div class="placement-toggle" style="margin-top:6px">
+          <span class="toggle-label">Orientation</span>
+          <div class="placement-pills">
+            <button class="orientation-btn active" data-orient="portrait">Portrait</button>
+            <button class="orientation-btn" data-orient="landscape">Landscape</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Location -->
+    <section class="section">
+      <h3>Location</h3>
+      <div class="location-presets">
+        <button class="preset-btn active" data-lat="48.3" data-lon="18.1">Nitra, SK</button>
+        <button class="preset-btn" data-lat="51.5" data-lon="-0.1">London</button>
+        <button class="preset-btn" data-lat="48.9" data-lon="2.3">Paris</button>
+        <button class="preset-btn" data-lat="40.7" data-lon="-74.0">New York</button>
+        <button class="preset-btn" data-lat="35.7" data-lon="139.7">Tokyo</button>
+        <button class="preset-btn" data-lat="-33.9" data-lon="151.2">Sydney</button>
+        <button class="preset-btn" data-lat="25.2" data-lon="55.3">Dubai</button>
+      </div>
+      <!-- Advanced: manual lat/lon (collapsible) -->
+      <button class="customize-toggle-btn" id="locationAdvancedBtn" style="margin-top:8px">&#x1F4CD; Advanced &#x25BC;</button>
+      <div class="collapsible-panel" id="locationAdvancedPanel">
+        <div class="control-row">
+          <label>Latitude</label>
+          <div class="slider-group">
+            <input type="range" id="latitude" min="-70" max="70" value="48.3" step="0.1">
+            <span class="value-display" id="latitudeVal">48.3&#xB0;</span>
+          </div>
+        </div>
+        <div class="control-row">
+          <label>Longitude</label>
+          <div class="slider-group">
+            <input type="range" id="longitude" min="-180" max="180" value="18.1" step="0.1">
+            <span class="value-display" id="longitudeVal">18.1&#xB0;</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Right Stats Panel -->
+  <div class="panel panel-right" id="statsPanel">
+    <div class="panel-header">
+      <button class="collapse-btn" id="collapseRight">&#x25BA;</button>
+      <h2>Energy Output</h2>
+      <span class="panel-icon">&#x26A1;</span>
+    </div>
+
+    <!-- Current Output -->
+    <section class="section">
+      <h3>Current Power</h3>
+      <div class="stat-card power-card">
+        <div class="stat-main">
+          <span class="stat-value" id="currentPower">0.0</span>
+          <span class="stat-unit">kW</span>
+        </div>
+        <div class="stat-sub">
+          <span id="powerPercent">0%</span> of peak capacity
+        </div>
+        <div class="power-bar-container">
+          <div class="power-bar" id="powerBar"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sun Info -->
+    <section class="section">
+      <h3>Sun Position</h3>
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="info-label">Elevation</span>
+          <span class="info-value" id="sunElevation">--&#xB0;</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Azimuth</span>
+          <span class="info-value" id="sunAzimuth">--&#xB0;</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Irradiance</span>
+          <span class="info-value" id="solarIrradiance">-- W/m&#xB2;</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Sunrise</span>
+          <span class="info-value" id="sunrise">--:--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Sunset</span>
+          <span class="info-value" id="sunset">--:--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Solar Noon</span>
+          <span class="info-value" id="solarNoon">--:--</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- System Info -->
+    <section class="section">
+      <h3>System</h3>
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="info-label">Total Panels</span>
+          <span class="info-value" id="totalPanels">--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Total Area</span>
+          <span class="info-value" id="totalArea">-- m&#xB2;</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Peak Power</span>
+          <span class="info-value" id="peakPower">-- kWp</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Daily Energy</span>
+          <span class="info-value" id="dailyEnergy">-- kWh</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Annual Energy</span>
+          <span class="info-value" id="annualEnergy">-- MWh</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">CO&#x2082; Saved</span>
+          <span class="info-value" id="co2Saved">-- t/yr</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Financial Analysis (Project mode only) -->
+    <section class="section" id="financialSection" style="display:none">
+      <h3>&#x1F4B6; Financial Analysis</h3>
+      <div class="proj-name" id="projNameDisplay"></div>
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="info-label">Annual Production</span>
+          <span class="info-value" id="projAnnualProd">--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Annual Consumption</span>
+          <span class="info-value" id="projAnnualCons">--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Annual Savings</span>
+          <span class="info-value proj-green" id="projSavings">--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">System Cost</span>
+          <span class="info-value" id="projSystemCost">--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Payback Period</span>
+          <span class="info-value" id="projPayback">--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Lifetime Savings</span>
+          <span class="info-value proj-green" id="projLifetime">--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">CO&#x2082; Reduction</span>
+          <span class="info-value" id="projCO2">--</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Self-Consumption</span>
+          <span class="info-value" id="projSelfConsume">--</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Daily Power Chart -->
+    <section class="section">
+      <h3>Today's Power Curve</h3>
+      <div class="chart-container">
+        <canvas id="powerChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Monthly Energy Chart -->
+    <section class="section">
+      <h3>Monthly Energy (kWh)</h3>
+      <div class="chart-container">
+        <canvas id="monthlyChart"></canvas>
+      </div>
+    </section>
+  </div>
+
+  <!-- Obstacle Toolbar (above info bar) -->
+  <div class="obstacle-toolbar" id="obstacleToolbar">
+    <span class="toolbar-label">Obstacles</span>
+    <button class="obstacle-btn" data-type="chimney" title="Chimney">&#x1F9F1; Chimney</button>
+    <button class="obstacle-btn" data-type="skylight" title="Skylight">&#x1FA9F; Skylight</button>
+    <button class="obstacle-btn" data-type="hvac" title="HVAC Unit">&#x2744; HVAC</button>
+    <button class="obstacle-btn" data-type="tree" title="Tree">&#x1F333; Tree</button>
+    <button class="obstacle-btn" data-type="pole" title="Utility Pole">&#x26A1; Pole</button>
+    <button class="obstacle-btn-delete" id="deleteAllObstaclesBtn" title="Remove all obstacles">&#x1F5D1; Clear</button>
+    <div id="obstacleSizeRow" class="obstacle-size-row" style="display:none">
+      <span class="toolbar-label">Size</span>
+      <input type="range" id="obstacleSize" min="0.3" max="3.0" value="1.0" step="0.1" style="width:80px">
+      <span class="value-display" id="obstacleSizeVal" style="min-width:28px;font-size:10px">1.0&#xD7;</span>
+    </div>
+    <div id="obstacleRotateRow" class="obstacle-size-row" style="display:none">
+      <span class="toolbar-label">Rotate</span>
+      <input type="range" id="obstacleRotate" min="0" max="359" value="0" step="1" style="width:80px">
+      <span class="value-display" id="obstacleRotateVal" style="min-width:28px;font-size:10px">0&#xB0;</span>
+    </div>
+  </div>
+
+  <!-- Bottom Info Bar -->
+  <div class="info-bar" id="infoBar">
+    <div class="info-bar-item">
+      <span class="ib-label">Roof</span>
+      <span class="ib-value" id="ibRoofType">Flat</span>
+    </div>
+    <div class="info-bar-item">
+      <span class="ib-label">Time</span>
+      <span class="ib-value" id="ibTime">12:00</span>
+    </div>
+    <div class="info-bar-item">
+      <span class="ib-label">Date</span>
+      <span class="ib-value" id="ibDate">--</span>
+    </div>
+    <div class="info-bar-item highlight">
+      <span class="ib-label">Power</span>
+      <span class="ib-value" id="ibPower">0.0 kW</span>
+    </div>
+    <div class="info-bar-item">
+      <span class="ib-label">Panels</span>
+      <span class="ib-value" id="ibPanels">--</span>
+    </div>
+    <div class="info-bar-item heatmap-item">
+      <button class="heatmap-btn" id="heatmapToggleBtn" title="Toggle irradiance heatmap">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="vertical-align:middle">
+          <rect x="1" y="1" width="4" height="14" rx="1" fill="#3b82f6"/>
+          <rect x="6" y="4" width="4" height="11" rx="1" fill="#f59e0b"/>
+          <rect x="11" y="2" width="4" height="13" rx="1" fill="#ef4444"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Heatmap color scale legend (floats above info bar) -->
+  <div id="heatmapLegend" class="heatmap-legend" style="display:none">
+    <div class="heatmap-bar"></div>
+    <div class="heatmap-labels">
+      <span>Low</span><span>Mid</span><span>High</span>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsOverlay" style="display:none">
+    <div class="modal-box settings-modal">
+      <div class="modal-header">
+        <h3>&#x2699;&#xFE0F; Settings</h3>
+        <button class="modal-close" id="settingsClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Language -->
+        <div class="settings-group-title">Language</div>
+        <div class="settings-row">
+          <label class="settings-label">Language</label>
+          <select class="settings-select" id="languageSelect">
+            <option value="en">&#x1F1EC;&#x1F1E7; English</option>
+            <option value="sk">&#x1F1F8;&#x1F1F0; Sloven&#x010D;ina</option>
+          </select>
+        </div>
+        <div class="settings-note">Language support coming soon. Only English is currently active.</div>
+        <hr class="settings-divider">
+        <!-- Scene -->
+        <div class="settings-group-title">Scene</div>
+        <div class="settings-row">
+          <label class="settings-label">Shadows</label>
+          <label class="toggle">
+            <input type="checkbox" id="showShadows" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="settings-row">
+          <label class="settings-label">Sun Trajectory</label>
+          <label class="toggle">
+            <input type="checkbox" id="showSunPath" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="settings-row">
+          <label class="settings-label">Show Compass</label>
+          <label class="toggle">
+            <input type="checkbox" id="showCompass" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <hr class="settings-divider">
+        <!-- Rendering -->
+        <div class="settings-group-title">Rendering</div>
+        <div class="settings-row">
+          <label class="settings-label">Exposure</label>
+          <div class="slider-group">
+            <input type="range" id="exposureSlider" min="0.3" max="2.5" value="1.5" step="0.05">
+            <span class="value-display" id="exposureVal">1.50</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <label class="settings-label">Bloom</label>
+          <div class="slider-group">
+            <input type="range" id="bloomSlider" min="0" max="1.0" value="0.1" step="0.05">
+            <span class="value-display" id="bloomVal">0.10</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <label class="settings-label">Fog Density</label>
+          <div class="slider-group">
+            <input type="range" id="fogDensity" min="0" max="0.02" value="0.002" step="0.001">
+            <span class="value-display" id="fogDensityVal">0.002</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+      <div class="loading-sun">&#x2600;</div>
+      <p>Initializing Solar Simulation...</p>
+    </div>
+  </div>
+
+  <script src="./node_modules/chart.js/dist/chart.umd.min.js"></script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

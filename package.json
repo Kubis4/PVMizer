@@ -1,0 +1,59 @@
+{
+  "name": "solar-panel-simulation",
+  "version": "1.0.0",
+  "description": "3D Solar Panel Roof Simulation with real-time sun tracking and energy calculations",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build:portable": "electron-builder --win portable",
+    "build:installer": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.2",
+    "three": "^0.163.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.kubis.solar-simulation",
+    "productName": "Solar Panel Simulation",
+    "copyright": "Copyright © 2024",
+    "asar": false,
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "index.html",
+      "style.css",
+      "electron/**/*",
+      "node_modules/three/build/three.module.js",
+      "node_modules/three/examples/jsm/**/*",
+      "node_modules/chart.js/dist/chart.umd.min.js"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis",     "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Solar Panel Simulation",
+      "installerHeaderIcon": "",
+      "uninstallDisplayName": "Solar Panel Simulation"
+    },
+    "portable": {
+      "artifactName": "${productName} ${version} Portable.exe"
+    }
+  }
+}
