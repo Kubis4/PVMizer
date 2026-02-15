@@ -130,11 +130,7 @@ export class UIController {
     const bar = document.getElementById('powerBar');
     if (bar) bar.style.width = `${Math.min(100, pct)}%`;
 
-    this._set('sunElevation',    `${fmt(sunElevation, 1)}\u00b0`);
-    this._set('sunAzimuth',      `${fmt(sunAzimuth, 1)}\u00b0`);
     this._set('solarIrradiance', `${Math.round(irradiance)} W/m\u00b2`);
-    this._set('sunrise',         sunrise !== null ? fmtTime(sunrise) : '--');
-    this._set('sunset',          sunset  !== null ? fmtTime(sunset)  : '--');
     this._set('solarNoon',       fmtTime(noon));
 
     this._set('ibTime',          fmtTime(timeHours));
@@ -143,20 +139,105 @@ export class UIController {
     this._set('ibPanels',        panelCount);
     this._set('ibRoofType',      roofType.charAt(0).toUpperCase() + roofType.slice(1));
 
-    // Daylight bar in Time & Date section
-    this._set('sunriseTime', sunrise !== null ? fmtTime(sunrise) : '--:--');
-    this._set('sunsetTime',  sunset  !== null ? fmtTime(sunset)  : '--:--');
-    const fill   = document.getElementById('daylightFill');
-    const marker = document.getElementById('daylightMarker');
-    if (fill && sunrise !== null && sunset !== null) {
-      const dayLen = sunset - sunrise;
-      const pct    = dayLen > 0 ? Math.min(100, (dayLen / 24) * 100) : 0;
-      const start  = (sunrise / 24) * 100;
-      fill.style.left  = `${start}%`;
-      fill.style.width = `${pct}%`;
+    // Sun dial widget
+    this._set('dialTime',      fmtTime(timeHours));
+    this._set('dialAzimuth',   `${Math.round(sunAzimuth)}\u00b0`);
+    this._set('dialElevation', `${Math.round(sunElevation)}\u00b0`);
+    this._set('sunriseTime',   sunrise !== null ? fmtTime(sunrise) : '--:--');
+    this._set('sunsetTime',    sunset  !== null ? fmtTime(sunset)  : '--:--');
+
+    // Day length
+    if (sunrise !== null && sunset !== null) {
+      const dayMin = Math.round((sunset - sunrise) * 60);
+      const dh = Math.floor(dayMin / 60);
+      const dm = dayMin % 60;
+      this._set('dialDayLength', `${dh}h ${String(dm).padStart(2,'0')}m`);
+    } else {
+      this._set('dialDayLength', '--');
     }
-    if (marker) {
-      marker.style.left = `${(timeHours / 24) * 100}%`;
+
+    this._updateSunDial(sunAzimuth, sunElevation, sunrise, sunset, timeHours);
+  }
+
+  // ─── Sun Dial SVG update ──────────────────────────────────────────────────
+  _updateSunDial(azimuth, elevation, sunrise, sunset, timeHours) {
+    // Arc geometry: semicircle from (20,120) to (220,120), center (120,120), r=100
+    // Angle 0 = West (left), PI = East (right) — maps azimuth 270°→0, 180°→PI/2, 90°→PI
+    const CX = 120, CY = 120, R = 100;
+
+    // Convert azimuth (0=N, 90=E, 180=S, 270=W) to arc angle (0=W, PI/2=S, PI=E)
+    const azToAngle = (az) => {
+      // Normalize: W=270→0, S=180→PI/2, E=90→PI
+      const a = ((270 - az + 360) % 360) * Math.PI / 180;
+      return Math.max(0, Math.min(Math.PI, a));
+    };
+
+    const arcPoint = (angle) => ({
+      x: CX - R * Math.cos(angle),
+      y: CY - R * Math.sin(angle)
+    });
+
+    // Make SVG arc path from angle1 to angle2
+    const makeArc = (a1, a2) => {
+      if (a1 >= a2) return '';
+      const p1 = arcPoint(a1);
+      const p2 = arcPoint(a2);
+      const largeArc = (a2 - a1) > Math.PI ? 1 : 0;
+      return `M ${p1.x},${p1.y} A ${R},${R} 0 ${largeArc},1 ${p2.x},${p2.y}`;
+    };
+
+    // Daylight arc: sunrise to sunset
+    if (sunrise !== null && sunset !== null) {
+      const sunriseAngle = azToAngle(SunSimulation.calculateSolarPosition(
+        this.app.state.latitude, this.app.state.longitude, this.app.state.date, sunrise).azimuth);
+      const sunsetAngle  = azToAngle(SunSimulation.calculateSolarPosition(
+        this.app.state.latitude, this.app.state.longitude, this.app.state.date, sunset).azimuth);
+
+      const a1 = Math.min(sunriseAngle, sunsetAngle);
+      const a2 = Math.max(sunriseAngle, sunsetAngle);
+
+      const dayArc = document.getElementById('dialDayArc');
+      if (dayArc) dayArc.setAttribute('d', makeArc(a1, a2) || `M 20,120 A 100,100 0 0,1 220,120`);
+
+      // Sunrise / sunset marker positions
+      const sp1 = arcPoint(sunriseAngle);
+      const sp2 = arcPoint(sunsetAngle);
+      const srM = document.getElementById('dialSunriseMarker');
+      const ssM = document.getElementById('dialSunsetMarker');
+      if (srM) { srM.setAttribute('cx', sp1.x); srM.setAttribute('cy', sp1.y); }
+      if (ssM) { ssM.setAttribute('cx', sp2.x); ssM.setAttribute('cy', sp2.y); }
+
+      // Twilight arcs (dawn before sunrise, dusk after sunset)
+      const dawnStart = Math.max(0, sunrise - 1);   // ~1h before sunrise
+      const duskEnd   = Math.min(24, sunset + 1);    // ~1h after sunset
+      const dawnAngle = azToAngle(SunSimulation.calculateSolarPosition(
+        this.app.state.latitude, this.app.state.longitude, this.app.state.date, dawnStart).azimuth);
+      const duskAngle = azToAngle(SunSimulation.calculateSolarPosition(
+        this.app.state.latitude, this.app.state.longitude, this.app.state.date, duskEnd).azimuth);
+
+      const twL = document.getElementById('dialTwilightLeft');
+      const twR = document.getElementById('dialTwilightRight');
+      if (twL) twL.setAttribute('d', makeArc(Math.min(dawnAngle, sunriseAngle), Math.max(dawnAngle, sunriseAngle)));
+      if (twR) twR.setAttribute('d', makeArc(Math.min(sunsetAngle, duskAngle), Math.max(sunsetAngle, duskAngle)));
+    }
+
+    // Sun position on the arc
+    const sunAngle = azToAngle(azimuth);
+    const sunP     = arcPoint(sunAngle);
+    const sunIcon  = document.getElementById('dialSunIcon');
+    const sunGlow  = document.getElementById('dialSunGlow');
+    const isDay    = elevation > 0;
+
+    if (sunIcon) {
+      sunIcon.setAttribute('cx', sunP.x);
+      sunIcon.setAttribute('cy', isDay ? sunP.y : CY);
+      sunIcon.setAttribute('opacity', isDay ? '1' : '0.3');
+      sunIcon.setAttribute('fill', isDay ? '#ffd700' : '#888');
+    }
+    if (sunGlow) {
+      sunGlow.setAttribute('cx', sunP.x);
+      sunGlow.setAttribute('cy', isDay ? sunP.y : CY);
+      sunGlow.setAttribute('opacity', isDay ? '0.6' : '0');
     }
   }
 

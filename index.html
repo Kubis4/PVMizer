@@ -103,41 +103,101 @@
       </div>
     </section>
 
-    <!-- Time Control -->
-    <section class="section">
-      <h3>Time &amp; Date</h3>
-      <div class="control-row">
-        <label>Date</label>
+    <!-- Time & Date with Sun Dial -->
+    <section class="section sun-dial-section">
+      <!-- Date row -->
+      <div class="dial-date-row">
+        <span class="dial-date-icon">&#x1F4C5;</span>
+        <label>Date:</label>
         <input type="date" id="simDate" class="date-input">
       </div>
+
+      <!-- Sun dial widget -->
+      <div class="sun-dial-widget">
+        <!-- Azimuth / Elevation labels -->
+        <div class="dial-header">
+          <span class="dial-stat">
+            <span class="dial-stat-label">Azimuth</span>
+            <span class="dial-stat-value" id="dialAzimuth">0&#xB0;</span>
+          </span>
+          <span class="dial-time" id="dialTime">12:00</span>
+          <span class="dial-stat">
+            <span class="dial-stat-label">Elevation</span>
+            <span class="dial-stat-value" id="dialElevation">0&#xB0;</span>
+          </span>
+        </div>
+
+        <!-- SVG arc -->
+        <div class="dial-arc-container">
+          <svg viewBox="0 0 240 140" class="dial-svg">
+            <!-- Night arc (below horizon) -->
+            <path class="dial-night-arc"
+              d="M 20,120 A 100,100 0 0,1 220,120"
+              fill="none" stroke="rgba(59,130,246,0.25)" stroke-width="6" stroke-linecap="round"/>
+            <!-- Daylight arc (drawn dynamically) -->
+            <path id="dialDayArc" class="dial-day-arc"
+              d="M 20,120 A 100,100 0 0,1 220,120"
+              fill="none" stroke="#ffcc00" stroke-width="6" stroke-linecap="round"/>
+            <!-- Twilight arcs -->
+            <path id="dialTwilightLeft" class="dial-twilight-arc"
+              fill="none" stroke="rgba(255,140,0,0.35)" stroke-width="4"
+              stroke-dasharray="4 4" stroke-linecap="round" d=""/>
+            <path id="dialTwilightRight" class="dial-twilight-arc"
+              fill="none" stroke="rgba(204,51,0,0.35)" stroke-width="4"
+              stroke-dasharray="4 4" stroke-linecap="round" d=""/>
+            <!-- Horizon line -->
+            <line x1="14" y1="120" x2="226" y2="120" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+            <!-- Compass labels -->
+            <text x="14" y="134" class="dial-compass">W</text>
+            <text x="120" y="14" class="dial-compass" text-anchor="middle">S</text>
+            <text x="226" y="134" class="dial-compass" text-anchor="end">E</text>
+            <!-- Sunrise marker -->
+            <circle id="dialSunriseMarker" cx="20" cy="120" r="6" fill="#ff6600" opacity="0.9"/>
+            <!-- Sunset marker -->
+            <circle id="dialSunsetMarker" cx="220" cy="120" r="6" fill="#cc3300" opacity="0.9"/>
+            <!-- Sun glow -->
+            <circle id="dialSunGlow" cx="120" cy="30" r="14"
+              fill="rgba(255,200,0,0.25)" filter="url(#sunGlow)" opacity="0"/>
+            <!-- Sun icon -->
+            <circle id="dialSunIcon" cx="120" cy="30" r="8"
+              fill="#ffd700" stroke="#ff8c00" stroke-width="1.5" opacity="0"/>
+            <!-- Glow filter -->
+            <defs>
+              <filter id="sunGlow">
+                <feGaussianBlur stdDeviation="4" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+          </svg>
+        </div>
+
+        <!-- Sunrise / Sunset / Day length -->
+        <div class="dial-footer">
+          <span class="dial-rise" title="Sunrise">&#x1F305; <span id="sunriseTime">--:--</span></span>
+          <span class="dial-daylen" title="Day length">&#x2600; <span id="dialDayLength">--</span></span>
+          <span class="dial-set" title="Sunset">&#x1F307; <span id="sunsetTime">--:--</span></span>
+        </div>
+      </div>
+
+      <!-- Time slider -->
       <div class="control-row">
-        <label>Time</label>
         <div class="slider-group">
           <input type="range" id="simTime" min="0" max="24" value="12" step="0.1">
           <span class="value-display" id="simTimeVal">12:00</span>
         </div>
       </div>
-      <div class="control-row">
-        <label>Speed</label>
-        <div class="slider-group">
-          <input type="range" id="simSpeed" min="1" max="100" value="60" step="1">
+
+      <!-- Speed + Auto Advance -->
+      <div class="dial-controls-row">
+        <div class="dial-speed">
+          <label>Speed</label>
+          <input type="range" id="simSpeed" min="1" max="100" value="60" step="1" class="dial-speed-slider">
           <span class="value-display" id="simSpeedVal">60x</span>
         </div>
-      </div>
-      <div class="toggle-row">
-        <label>Auto Advance</label>
-        <label class="toggle">
+        <label class="toggle dial-auto-toggle" title="Auto Advance">
           <input type="checkbox" id="autoAdvance" checked>
           <span class="toggle-slider"></span>
         </label>
-      </div>
-      <div class="daylight-row">
-        <span class="daylight-label" title="Sunrise">&#x1F305; <span id="sunriseTime">--:--</span></span>
-        <span class="daylight-bar">
-          <span class="daylight-fill" id="daylightFill"></span>
-          <span class="daylight-marker" id="daylightMarker"></span>
-        </span>
-        <span class="daylight-label" title="Sunset">&#x1F307; <span id="sunsetTime">--:--</span></span>
       </div>
     </section>
 
@@ -262,29 +322,13 @@
       </div>
     </section>
 
-    <!-- Sun Info -->
+    <!-- Sun Info (compact — main data shown in dial) -->
     <section class="section">
-      <h3>Sun Position</h3>
+      <h3>Sun Info</h3>
       <div class="info-grid">
-        <div class="info-item">
-          <span class="info-label">Elevation</span>
-          <span class="info-value" id="sunElevation">--&#xB0;</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Azimuth</span>
-          <span class="info-value" id="sunAzimuth">--&#xB0;</span>
-        </div>
         <div class="info-item">
           <span class="info-label">Irradiance</span>
           <span class="info-value" id="solarIrradiance">-- W/m&#xB2;</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Sunrise</span>
-          <span class="info-value" id="sunrise">--:--</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Sunset</span>
-          <span class="info-value" id="sunset">--:--</span>
         </div>
         <div class="info-item">
           <span class="info-label">Solar Noon</span>

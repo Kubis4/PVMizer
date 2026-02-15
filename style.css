@@ -412,56 +412,150 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   margin-top: 6px;
 }
 
-/* ===== DAYLIGHT BAR (Time & Date section) ===== */
-.daylight-row {
+/* ===== SUN DIAL WIDGET ===== */
+.sun-dial-section { padding: 10px 12px; }
+
+.dial-date-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
-  padding: 6px 0 2px;
+  margin-bottom: 8px;
+}
+.dial-date-row label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.dial-date-row .date-input {
+  flex: 1;
+  font-size: 12px;
+}
+.dial-date-icon { font-size: 14px; }
+
+.sun-dial-widget {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px 6px;
+  margin-bottom: 8px;
+}
+
+.dial-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.dial-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 60px;
+}
+
+.dial-stat-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dial-stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dial-time {
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+}
+
+.dial-arc-container {
+  width: 100%;
+  max-width: 240px;
+  margin: 0 auto;
+}
+
+.dial-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.dial-compass {
+  fill: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dial-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding-top: 6px;
   border-top: 1px solid var(--border);
 }
 
-.daylight-label {
+.dial-rise, .dial-set {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dial-rise { color: #ff8c00; }
+.dial-set  { color: #cc5500; }
+
+.dial-daylen {
   font-size: 11px;
   color: var(--text-muted);
-  white-space: nowrap;
-  min-width: 52px;
 }
 
-.daylight-label:last-child {
-  text-align: right;
+.dial-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.daylight-bar {
+.dial-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: 1;
-  height: 6px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 3px;
-  position: relative;
-  overflow: visible;
 }
 
-.daylight-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: linear-gradient(90deg, #ff8c00, #ffcc00 30%, #ffcc00 70%, #cc3300);
-  border-radius: 3px;
-  transition: width 0.3s;
+.dial-speed label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.daylight-marker {
-  position: absolute;
-  top: -3px;
-  width: 3px;
+.dial-speed-slider {
+  flex: 1;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+.dial-speed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
   height: 12px;
-  background: #fff;
-  border-radius: 1px;
-  transform: translateX(-50%);
-  transition: left 0.2s;
-  box-shadow: 0 0 3px rgba(0,0,0,0.5);
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.dial-auto-toggle {
+  flex-shrink: 0;
 }
 
 /* ===== BOTTOM INFO BAR ===== */
