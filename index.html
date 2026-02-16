@@ -18,14 +18,14 @@
   <canvas id="canvas"></canvas>
 
   <!-- Fixed restore tabs (visible only when respective panel is collapsed) -->
-  <button class="panel-restore-btn panel-restore-left" id="restoreLeft" title="Show controls">&#x25BA;</button>
-  <button class="panel-restore-btn panel-restore-right" id="restoreRight" title="Show energy output">&#x25C4;</button>
+  <button class="panel-restore-btn panel-restore-left" id="restoreLeft" data-i18n="btn.showControls" data-i18n-attr="title" title="Show controls">&#x25BA;</button>
+  <button class="panel-restore-btn panel-restore-right" id="restoreRight" data-i18n="btn.showEnergy" data-i18n-attr="title" title="Show energy output">&#x25C4;</button>
 
   <!-- Left Control Panel -->
   <div class="panel panel-left" id="controlPanel">
     <div class="panel-header">
       <span class="panel-icon">&#x2600;&#xFE0F;</span>
-      <h2>Solar Simulation</h2>
+      <h2 data-i18n="panel.title">Solar Simulation</h2>
       <div class="header-actions">
         <button class="header-btn" id="settingsBtn" title="Settings">&#x2699;&#xFE0F;</button>
         <button class="header-btn home-btn" id="homeBtn" title="Back to project selection">&#x1F3E0;</button>
@@ -35,67 +35,67 @@
 
     <!-- Roof Type Selector -->
     <section class="section">
-      <h3>Roof Type</h3>
+      <h3 data-i18n="section.roofType">Roof Type</h3>
       <div class="roof-selector">
         <button class="roof-btn active" data-roof="flat">
           <span class="roof-icon">&#x1F7E6;</span>
-          <span>Flat</span>
+          <span data-i18n="roof.flat">Flat</span>
         </button>
         <button class="roof-btn" data-roof="gable">
           <span class="roof-icon">&#x1F3E0;</span>
-          <span>Gable</span>
+          <span data-i18n="roof.gable">Gable</span>
         </button>
         <button class="roof-btn" data-roof="hip">
           <span class="roof-icon">&#x2B21;</span>
-          <span>Hip</span>
+          <span data-i18n="roof.hip">Hip</span>
         </button>
         <button class="roof-btn" data-roof="pyramid">
           <span class="roof-icon">&#x25B3;</span>
-          <span>Pyramid</span>
+          <span data-i18n="roof.pyramid">Pyramid</span>
         </button>
       </div>
     </section>
 
     <!-- Building Dimensions -->
     <section class="section">
-      <h3>Building Dimensions</h3>
+      <h3 data-i18n="section.building">Building Dimensions</h3>
       <div class="control-row">
-        <label>Width</label>
+        <label data-i18n="label.width">Width</label>
         <div class="slider-group">
           <input type="range" id="houseWidth" min="5" max="20" value="10" step="0.5">
           <span class="value-display" id="houseWidthVal">10.0m</span>
         </div>
       </div>
       <div class="control-row">
-        <label>Depth</label>
+        <label data-i18n="label.depth">Depth</label>
         <div class="slider-group">
           <input type="range" id="houseDepth" min="5" max="20" value="10" step="0.5">
           <span class="value-display" id="houseDepthVal">10.0m</span>
         </div>
       </div>
       <div class="control-row">
-        <label>Wall Height</label>
+        <label data-i18n="label.wallHeight">Wall Height</label>
         <div class="slider-group">
           <input type="range" id="wallHeight" min="2" max="6" value="3" step="0.25">
           <span class="value-display" id="wallHeightVal">3.00m</span>
         </div>
       </div>
       <div class="control-row disabled" id="ridgeLengthRow">
-        <label>Ridge Length</label>
+        <label data-i18n="label.ridgeLength">Ridge Length</label>
         <div class="slider-group">
           <input type="range" id="ridgeLength" min="2" max="8" value="4" step="0.5">
           <span class="value-display" id="ridgeLengthVal">4.0m</span>
         </div>
       </div>
       <div class="control-row" id="pitchAngleRow">
-        <label>Pitch Angle</label>
+        <label data-i18n="label.pitchAngle">Pitch Angle</label>
         <div class="slider-group">
           <input type="range" id="roofPitch" min="5" max="60" value="30" step="1">
           <span class="value-display" id="roofPitchVal">30&#xB0;</span>
         </div>
       </div>
       <div class="control-row">
-        <label>Rotation</label>
+        <label data-i18n="label.rotation">Rotation</label>
         <div class="slider-group">
           <input type="range" id="buildingRotation" min="0" max="359" value="0" step="1">
           <span class="value-display" id="buildingRotationVal">0&#xB0;</span>
@@ -108,7 +108,7 @@
       <!-- Date row -->
       <div class="dial-date-row">
         <span class="dial-date-icon">&#x1F4C5;</span>
-        <label>Date:</label>
+        <label data-i18n="label.date">Date:</label>
         <input type="date" id="simDate" class="date-input">
       </div>
 
@@ -117,27 +117,29 @@
         <!-- Azimuth / Elevation labels -->
         <div class="dial-header">
           <span class="dial-stat">
-            <span class="dial-stat-label">Azimuth</span>
+            <span class="dial-stat-label" data-i18n="label.azimuth">Azimuth</span>
             <span class="dial-stat-value" id="dialAzimuth">0&#xB0;</span>
           </span>
           <span class="dial-time" id="dialTime">12:00</span>
           <span class="dial-stat">
-            <span class="dial-stat-label">Elevation</span>
+            <span class="dial-stat-label" data-i18n="label.elevation">Elevation</span>
             <span class="dial-stat-value" id="dialElevation">0&#xB0;</span>
           </span>
         </div>
 
-        <!-- SVG arc -->
+        <!-- SVG arc — E(left) → S/N(top) → W(right), 24h visible -->
         <div class="dial-arc-container">
           <svg viewBox="0 0 240 140" class="dial-svg">
-            <!-- Night arc (below horizon) -->
+            <!-- Full arc background (dim, always visible = 24h path) -->
             <path class="dial-night-arc"
               d="M 20,120 A 100,100 0 0,1 220,120"
-              fill="none" stroke="rgba(59,130,246,0.25)" stroke-width="6" stroke-linecap="round"/>
-            <!-- Daylight arc (drawn dynamically) -->
-            <path id="dialDayArc" class="dial-day-arc"
-              d="M 20,120 A 100,100 0 0,1 220,120"
-              fill="none" stroke="#ffcc00" stroke-width="6" stroke-linecap="round"/>
+              fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="6" stroke-linecap="round"/>
+            <!-- Daylight arc (yellow, drawn dynamically for sunrise→sunset) -->
+            <path id="dialDayArc"
+              d="" fill="none" stroke="#ffcc00" stroke-width="6" stroke-linecap="round"/>
+            <!-- Elapsed arc (brighter, sunrise→current position) -->
+            <path id="dialDayArcElapsed"
+              d="" fill="none" stroke="#ffa500" stroke-width="6" stroke-linecap="round"/>
             <!-- Twilight arcs -->
             <path id="dialTwilightLeft" class="dial-twilight-arc"
               fill="none" stroke="rgba(255,140,0,0.35)" stroke-width="4"
@@ -147,21 +149,21 @@
               stroke-dasharray="4 4" stroke-linecap="round" d=""/>
             <!-- Horizon line -->
             <line x1="14" y1="120" x2="226" y2="120" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
-            <!-- Compass labels -->
-            <text x="14" y="134" class="dial-compass">W</text>
-            <text x="120" y="14" class="dial-compass" text-anchor="middle">S</text>
-            <text x="226" y="134" class="dial-compass" text-anchor="end">E</text>
-            <!-- Sunrise marker -->
-            <circle id="dialSunriseMarker" cx="20" cy="120" r="6" fill="#ff6600" opacity="0.9"/>
-            <!-- Sunset marker -->
-            <circle id="dialSunsetMarker" cx="220" cy="120" r="6" fill="#cc3300" opacity="0.9"/>
+            <!-- Compass labels: E on left, S/N on top, W on right -->
+            <text x="14" y="134" class="dial-compass">E</text>
+            <text id="dialCompassTop" x="120" y="14" class="dial-compass" text-anchor="middle">S</text>
+            <text x="226" y="134" class="dial-compass" text-anchor="end">W</text>
+            <!-- Sunrise marker (on left side) -->
+            <circle id="dialSunriseMarker" cx="20" cy="120" r="5" fill="#ff6600" opacity="0.9"/>
+            <!-- Sunset marker (on right side) -->
+            <circle id="dialSunsetMarker" cx="220" cy="120" r="5" fill="#cc3300" opacity="0.9"/>
             <!-- Sun glow -->
-            <circle id="dialSunGlow" cx="120" cy="30" r="14"
+            <circle id="dialSunGlow" cx="120" cy="30" r="16"
               fill="rgba(255,200,0,0.25)" filter="url(#sunGlow)" opacity="0"/>
-            <!-- Sun icon -->
-            <circle id="dialSunIcon" cx="120" cy="30" r="8"
-              fill="#ffd700" stroke="#ff8c00" stroke-width="1.5" opacity="0"/>
-            <!-- Glow filter -->
+            <!-- Sun icon (draggable, ON the arc) -->
+            <circle id="dialSunIcon" cx="120" cy="30" r="10"
+              fill="#ffd700" stroke="#ff8c00" stroke-width="2" opacity="1"
+              style="cursor: grab;"/>
             <defs>
               <filter id="sunGlow">
                 <feGaussianBlur stdDeviation="4" result="blur"/>
@@ -179,22 +181,22 @@
         </div>
       </div>
 
-      <!-- Time slider -->
-      <div class="control-row">
-        <div class="slider-group">
-          <input type="range" id="simTime" min="0" max="24" value="12" step="0.1">
-          <span class="value-display" id="simTimeVal">12:00</span>
-        </div>
-      </div>
+      <!-- Hidden time slider (kept for internal sync) -->
+      <input type="range" id="simTime" min="0" max="24" value="12" step="0.1" style="display:none">
+      <span id="simTimeVal" style="display:none">12:00</span>
 
-      <!-- Speed + Auto Advance -->
+      <!-- Speed slider -->
       <div class="dial-controls-row">
         <div class="dial-speed">
-          <label>Speed</label>
+          <label data-i18n="label.speed">Speed</label>
           <input type="range" id="simSpeed" min="1" max="100" value="60" step="1" class="dial-speed-slider">
           <span class="value-display" id="simSpeedVal">60x</span>
         </div>
-        <label class="toggle dial-auto-toggle" title="Auto Advance">
+      </div>
+      <!-- Simulation toggle -->
+      <div class="dial-controls-row" style="justify-content:center;gap:8px;margin-top:4px;">
+        <label style="font-size:11px;color:#aaa;" data-i18n="label.simulation">Simulation</label>
+        <label class="toggle dial-auto-toggle" title="Run Sun Simulation">
           <input type="checkbox" id="autoAdvance" checked>
           <span class="toggle-slider"></span>
         </label>
@@ -203,19 +205,19 @@
 
     <!-- Solar Panel Settings -->
     <section class="section">
-      <h3>Solar Panels</h3>
+      <h3 data-i18n="section.panels">Solar Panels</h3>
 
       <!-- Flat-roof layout options (hidden for non-flat roofs) -->
       <div id="flatRoofOptions" style="display:none">
         <div class="placement-toggle">
-          <span class="toggle-label">Layout</span>
+          <span class="toggle-label" data-i18n="label.layout">Layout</span>
           <div class="placement-pills">
-            <button class="layout-btn active" data-layout="south">&#x2600; South</button>
-            <button class="layout-btn" data-layout="east-west">&#x21C4; E / W</button>
+            <button class="layout-btn active" data-layout="south" data-i18n-html="layout.south">&#x2600; South</button>
+            <button class="layout-btn" data-layout="east-west" data-i18n-html="layout.ew">&#x21C4; E / W</button>
           </div>
         </div>
         <div class="control-row" id="panelTiltRow">
-          <label>Tilt Angle</label>
+          <label data-i18n="label.tiltAngle">Tilt Angle</label>
           <div class="slider-group">
             <input type="range" id="panelTilt" min="0" max="45" value="15" step="1">
             <span class="value-display" id="panelTiltVal">15&#xB0;</span>
@@ -225,28 +227,28 @@
       <!-- Panel customization (always visible) -->
       <div id="customizePanel">
         <div class="control-row">
-          <label>Panel Width</label>
+          <label data-i18n="label.panelWidth">Panel Width</label>
           <div class="slider-group">
             <input type="range" id="panelWidth" min="0.5" max="1.5" value="1.0" step="0.05">
             <span class="value-display" id="panelWidthVal">1.00m</span>
           </div>
         </div>
         <div class="control-row">
-          <label>Panel Height</label>
+          <label data-i18n="label.panelHeight">Panel Height</label>
           <div class="slider-group">
             <input type="range" id="panelHeight" min="0.8" max="2.5" value="1.65" step="0.05">
             <span class="value-display" id="panelHeightVal">1.65m</span>
           </div>
         </div>
         <div class="control-row">
-          <label>Nominal Power</label>
+          <label data-i18n="label.nominalPower">Nominal Power</label>
           <div class="slider-group">
             <input type="range" id="panelNominalWp" min="150" max="600" value="440" step="5">
             <span class="value-display" id="panelNominalWpVal">440 Wp</span>
           </div>
         </div>
         <div class="control-row">
-          <label>Panel Gap</label>
+          <label data-i18n="label.panelGap">Panel Gap</label>
           <div class="slider-group">
             <input type="range" id="panelGap" min="0.02" max="0.3" value="0.1" step="0.01">
             <span class="value-display" id="panelGapVal">0.10m</span>
@@ -254,10 +256,10 @@
         </div>
         <!-- Panel orientation toggle -->
         <div class="placement-toggle" style="margin-top:6px">
-          <span class="toggle-label">Orientation</span>
+          <span class="toggle-label" data-i18n="label.orientation">Orientation</span>
           <div class="placement-pills">
-            <button class="orientation-btn active" data-orient="portrait">Portrait</button>
-            <button class="orientation-btn" data-orient="landscape">Landscape</button>
+            <button class="orientation-btn active" data-orient="portrait" data-i18n="orient.portrait">Portrait</button>
+            <button class="orientation-btn" data-orient="landscape" data-i18n="orient.landscape">Landscape</button>
           </div>
         </div>
       </div>
@@ -265,7 +267,7 @@
 
     <!-- Location -->
     <section class="section">
-      <h3>Location</h3>
+      <h3 data-i18n="section.location">Location</h3>
       <div class="location-presets">
         <button class="preset-btn active" data-lat="48.3" data-lon="18.1">Nitra, SK</button>
         <button class="preset-btn" data-lat="51.5" data-lon="-0.1">London</button>
@@ -276,17 +278,17 @@
         <button class="preset-btn" data-lat="25.2" data-lon="55.3">Dubai</button>
       </div>
       <!-- Advanced: manual lat/lon (collapsible) -->
-      <button class="customize-toggle-btn" id="locationAdvancedBtn" style="margin-top:8px">&#x1F4CD; Advanced &#x25BC;</button>
+      <button class="customize-toggle-btn" id="locationAdvancedBtn" style="margin-top:8px" data-i18n-html="label.advanced">&#x1F4CD; Advanced &#x25BC;</button>
       <div class="collapsible-panel" id="locationAdvancedPanel">
         <div class="control-row">
-          <label>Latitude</label>
+          <label data-i18n="label.latitude">Latitude</label>
           <div class="slider-group">
             <input type="range" id="latitude" min="-70" max="70" value="48.3" step="0.1">
             <span class="value-display" id="latitudeVal">48.3&#xB0;</span>
           </div>
         </div>
         <div class="control-row">
-          <label>Longitude</label>
+          <label data-i18n="label.longitude">Longitude</label>
           <div class="slider-group">
             <input type="range" id="longitude" min="-180" max="180" value="18.1" step="0.1">
             <span class="value-display" id="longitudeVal">18.1&#xB0;</span>
@@ -301,20 +303,20 @@
   <div class="panel panel-right" id="statsPanel">
     <div class="panel-header">
       <button class="collapse-btn" id="collapseRight">&#x25BA;</button>
-      <h2>Energy Output</h2>
+      <h2 data-i18n="panel.energy">Energy Output</h2>
       <span class="panel-icon">&#x26A1;</span>
     </div>
 
     <!-- Current Output -->
     <section class="section">
-      <h3>Current Power</h3>
+      <h3 data-i18n="section.currentPower">Current Power</h3>
       <div class="stat-card power-card">
         <div class="stat-main">
           <span class="stat-value" id="currentPower">0.0</span>
           <span class="stat-unit">kW</span>
         </div>
         <div class="stat-sub">
-          <span id="powerPercent">0%</span> of peak capacity
+          <span id="powerPercent">0%</span> <span data-i18n="label.ofPeak">of peak capacity</span>
         </div>
         <div class="power-bar-container">
           <div class="power-bar" id="powerBar"></div>
@@ -324,14 +326,14 @@
 
     <!-- Sun Info (compact — main data shown in dial) -->
     <section class="section">
-      <h3>Sun Info</h3>
+      <h3 data-i18n="section.sunInfo">Sun Info</h3>
       <div class="info-grid">
         <div class="info-item">
-          <span class="info-label">Irradiance</span>
+          <span class="info-label" data-i18n="label.irradiance">Irradiance</span>
           <span class="info-value" id="solarIrradiance">-- W/m&#xB2;</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Solar Noon</span>
+          <span class="info-label" data-i18n="label.solarNoon">Solar Noon</span>
           <span class="info-value" id="solarNoon">--:--</span>
         </div>
       </div>
@@ -339,30 +341,30 @@
 
     <!-- System Info -->
     <section class="section">
-      <h3>System</h3>
+      <h3 data-i18n="section.system">System</h3>
       <div class="info-grid">
         <div class="info-item">
-          <span class="info-label">Total Panels</span>
+          <span class="info-label" data-i18n="label.totalPanels">Total Panels</span>
           <span class="info-value" id="totalPanels">--</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Total Area</span>
+          <span class="info-label" data-i18n="label.totalArea">Total Area</span>
           <span class="info-value" id="totalArea">-- m&#xB2;</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Peak Power</span>
+          <span class="info-label" data-i18n="label.peakPower">Peak Power</span>
           <span class="info-value" id="peakPower">-- kWp</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Daily Energy</span>
+          <span class="info-label" data-i18n="label.dailyEnergy">Daily Energy</span>
           <span class="info-value" id="dailyEnergy">-- kWh</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Annual Energy</span>
+          <span class="info-label" data-i18n="label.annualEnergy">Annual Energy</span>
           <span class="info-value" id="annualEnergy">-- MWh</span>
         </div>
         <div class="info-item">
-          <span class="info-label">CO&#x2082; Saved</span>
+          <span class="info-label" data-i18n-html="label.co2Saved">CO&#x2082; Saved</span>
           <span class="info-value" id="co2Saved">-- t/yr</span>
         </div>
       </div>
@@ -370,39 +372,39 @@
 
     <!-- Financial Analysis (Project mode only) -->
     <section class="section" id="financialSection" style="display:none">
-      <h3>&#x1F4B6; Financial Analysis</h3>
+      <h3 data-i18n-html="section.financial">&#x1F4B6; Financial Analysis</h3>
       <div class="proj-name" id="projNameDisplay"></div>
       <div class="info-grid">
         <div class="info-item">
-          <span class="info-label">Annual Production</span>
+          <span class="info-label" data-i18n="label.annualProd">Annual Production</span>
           <span class="info-value" id="projAnnualProd">--</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Annual Consumption</span>
+          <span class="info-label" data-i18n="label.annualCons">Annual Consumption</span>
           <span class="info-value" id="projAnnualCons">--</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Annual Savings</span>
+          <span class="info-label" data-i18n="label.annualSavings">Annual Savings</span>
           <span class="info-value proj-green" id="projSavings">--</span>
         </div>
         <div class="info-item">
-          <span class="info-label">System Cost</span>
+          <span class="info-label" data-i18n="label.systemCost">System Cost</span>
           <span class="info-value" id="projSystemCost">--</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Payback Period</span>
+          <span class="info-label" data-i18n="label.payback">Payback Period</span>
           <span class="info-value" id="projPayback">--</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Lifetime Savings</span>
+          <span class="info-label" data-i18n="label.lifetimeSavings">Lifetime Savings</span>
           <span class="info-value proj-green" id="projLifetime">--</span>
         </div>
         <div class="info-item">
-          <span class="info-label">CO&#x2082; Reduction</span>
+          <span class="info-label" data-i18n-html="label.co2Reduction">CO&#x2082; Reduction</span>
           <span class="info-value" id="projCO2">--</span>
         </div>
         <div class="info-item">
-          <span class="info-label">Self-Consumption</span>
+          <span class="info-label" data-i18n="label.selfConsumption">Self-Consumption</span>
           <span class="info-value" id="projSelfConsume">--</span>
         </div>
       </div>
@@ -410,7 +412,7 @@
 
     <!-- Daily Power Chart -->
     <section class="section">
-      <h3>Today's Power Curve</h3>
+      <h3 data-i18n="section.powerCurve">Today's Power Curve</h3>
       <div class="chart-container">
         <canvas id="powerChart"></canvas>
       </div>
@@ -418,7 +420,7 @@
 
     <!-- Monthly Energy Chart -->
     <section class="section">
-      <h3>Monthly Energy (kWh)</h3>
+      <h3 data-i18n="section.monthlyEnergy">Monthly Energy (kWh)</h3>
       <div class="chart-container">
         <canvas id="monthlyChart"></canvas>
       </div>
@@ -427,20 +429,20 @@
 
   <!-- Obstacle Toolbar (above info bar) -->
   <div class="obstacle-toolbar" id="obstacleToolbar">
-    <span class="toolbar-label">Obstacles</span>
-    <button class="obstacle-btn" data-type="chimney" title="Chimney">&#x1F9F1; Chimney</button>
-    <button class="obstacle-btn" data-type="skylight" title="Skylight">&#x1FA9F; Skylight</button>
-    <button class="obstacle-btn" data-type="hvac" title="HVAC Unit">&#x2744; HVAC</button>
-    <button class="obstacle-btn" data-type="tree" title="Tree">&#x1F333; Tree</button>
-    <button class="obstacle-btn" data-type="pole" title="Utility Pole">&#x26A1; Pole</button>
-    <button class="obstacle-btn-delete" id="deleteAllObstaclesBtn" title="Remove all obstacles">&#x1F5D1; Clear</button>
+    <span class="toolbar-label" data-i18n="toolbar.obstacles">Obstacles</span>
+    <button class="obstacle-btn" data-type="chimney" title="Chimney" data-i18n-html="obs.chimney">&#x1F9F1; Chimney</button>
+    <button class="obstacle-btn" data-type="skylight" title="Skylight" data-i18n-html="obs.skylight">&#x1FA9F; Skylight</button>
+    <button class="obstacle-btn" data-type="hvac" title="HVAC Unit" data-i18n-html="obs.hvac">&#x2744; HVAC</button>
+    <button class="obstacle-btn" data-type="tree" title="Tree" data-i18n-html="obs.tree">&#x1F333; Tree</button>
+    <button class="obstacle-btn" data-type="pole" title="Utility Pole" data-i18n-html="obs.pole">&#x26A1; Pole</button>
+    <button class="obstacle-btn-delete" id="deleteAllObstaclesBtn" title="Remove all obstacles" data-i18n-html="obs.clear">&#x1F5D1; Clear</button>
     <div id="obstacleSizeRow" class="obstacle-size-row" style="display:none">
-      <span class="toolbar-label">Size</span>
+      <span class="toolbar-label" data-i18n="label.size">Size</span>
       <input type="range" id="obstacleSize" min="0.3" max="3.0" value="1.0" step="0.1" style="width:80px">
       <span class="value-display" id="obstacleSizeVal" style="min-width:28px;font-size:10px">1.0&#xD7;</span>
     </div>
     <div id="obstacleRotateRow" class="obstacle-size-row" style="display:none">
-      <span class="toolbar-label">Rotate</span>
+      <span class="toolbar-label" data-i18n="label.rotate">Rotate</span>
       <input type="range" id="obstacleRotate" min="0" max="359" value="0" step="1" style="width:80px">
       <span class="value-display" id="obstacleRotateVal" style="min-width:28px;font-size:10px">0&#xB0;</span>
     </div>
@@ -449,23 +451,23 @@
   <!-- Bottom Info Bar -->
   <div class="info-bar" id="infoBar">
     <div class="info-bar-item">
-      <span class="ib-label">Roof</span>
+      <span class="ib-label" data-i18n="ib.roof">Roof</span>
       <span class="ib-value" id="ibRoofType">Flat</span>
     </div>
     <div class="info-bar-item">
-      <span class="ib-label">Time</span>
+      <span class="ib-label" data-i18n="ib.time">Time</span>
       <span class="ib-value" id="ibTime">12:00</span>
     </div>
     <div class="info-bar-item">
-      <span class="ib-label">Date</span>
+      <span class="ib-label" data-i18n="ib.date">Date</span>
       <span class="ib-value" id="ibDate">--</span>
     </div>
     <div class="info-bar-item highlight">
-      <span class="ib-label">Power</span>
+      <span class="ib-label" data-i18n="ib.power">Power</span>
       <span class="ib-value" id="ibPower">0.0 kW</span>
     </div>
     <div class="info-bar-item">
-      <span class="ib-label">Panels</span>
+      <span class="ib-label" data-i18n="ib.panels">Panels</span>
       <span class="ib-value" id="ibPanels">--</span>
     </div>
     <div class="info-bar-item heatmap-item">
@@ -476,14 +478,12 @@
           <rect x="11" y="2" width="4" height="13" rx="1" fill="#ef4444"/>
         </svg>
       </button>
-    </div>
-  </div>
-
-  <!-- Heatmap color scale legend (floats above info bar) -->
-  <div id="heatmapLegend" class="heatmap-legend" style="display:none">
-    <div class="heatmap-bar"></div>
-    <div class="heatmap-labels">
-      <span>Low</span><span>Mid</span><span>High</span>
+      <div id="heatmapLegend" class="heatmap-legend-inline" style="display:none">
+        <div class="heatmap-bar"></div>
+        <div class="heatmap-labels">
+          <span data-i18n="heatmap.low">Low</span><span data-i18n="heatmap.mid">Mid</span><span data-i18n="heatmap.high">High</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -491,39 +491,38 @@
   <div class="modal-overlay" id="settingsOverlay" style="display:none">
     <div class="modal-box settings-modal">
       <div class="modal-header">
-        <h3>&#x2699;&#xFE0F; Settings</h3>
+        <h3 data-i18n-html="settings.title">&#x2699;&#xFE0F; Settings</h3>
         <button class="modal-close" id="settingsClose">&times;</button>
       </div>
       <div class="modal-body">
         <!-- Language -->
-        <div class="settings-group-title">Language</div>
+        <div class="settings-group-title" data-i18n="settings.language">Language</div>
         <div class="settings-row">
-          <label class="settings-label">Language</label>
+          <label class="settings-label" data-i18n="settings.language">Language</label>
           <select class="settings-select" id="languageSelect">
             <option value="en">&#x1F1EC;&#x1F1E7; English</option>
             <option value="sk">&#x1F1F8;&#x1F1F0; Sloven&#x010D;ina</option>
           </select>
         </div>
-        <div class="settings-note">Language support coming soon. Only English is currently active.</div>
         <hr class="settings-divider">
         <!-- Scene -->
-        <div class="settings-group-title">Scene</div>
+        <div class="settings-group-title" data-i18n="settings.scene">Scene</div>
         <div class="settings-row">
-          <label class="settings-label">Shadows</label>
+          <label class="settings-label" data-i18n="settings.shadows">Shadows</label>
           <label class="toggle">
             <input type="checkbox" id="showShadows" checked>
             <span class="toggle-slider"></span>
           </label>
         </div>
         <div class="settings-row">
-          <label class="settings-label">Sun Trajectory</label>
+          <label class="settings-label" data-i18n="settings.sunTrajectory">Sun Trajectory</label>
           <label class="toggle">
             <input type="checkbox" id="showSunPath" checked>
             <span class="toggle-slider"></span>
           </label>
         </div>
         <div class="settings-row">
-          <label class="settings-label">Show Compass</label>
+          <label class="settings-label" data-i18n="settings.showCompass">Show Compass</label>
           <label class="toggle">
             <input type="checkbox" id="showCompass" checked>
             <span class="toggle-slider"></span>
@@ -531,23 +530,23 @@
         </div>
         <hr class="settings-divider">
         <!-- Rendering -->
-        <div class="settings-group-title">Rendering</div>
+        <div class="settings-group-title" data-i18n="settings.rendering">Rendering</div>
         <div class="settings-row">
-          <label class="settings-label">Exposure</label>
+          <label class="settings-label" data-i18n="settings.exposure">Exposure</label>
           <div class="slider-group">
             <input type="range" id="exposureSlider" min="0.3" max="2.5" value="1.5" step="0.05">
             <span class="value-display" id="exposureVal">1.50</span>
           </div>
         </div>
         <div class="settings-row">
-          <label class="settings-label">Bloom</label>
+          <label class="settings-label" data-i18n="settings.bloom">Bloom</label>
           <div class="slider-group">
             <input type="range" id="bloomSlider" min="0" max="1.0" value="0.1" step="0.05">
             <span class="value-display" id="bloomVal">0.10</span>
           </div>
         </div>
         <div class="settings-row">
-          <label class="settings-label">Fog Density</label>
+          <label class="settings-label" data-i18n="settings.fogDensity">Fog Density</label>
           <div class="slider-group">
             <input type="range" id="fogDensity" min="0" max="0.02" value="0.002" step="0.001">
             <span class="value-display" id="fogDensityVal">0.002</span>
@@ -561,7 +560,7 @@
   <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-content">
       <div class="loading-sun">&#x2600;</div>
-      <p>Initializing Solar Simulation...</p>
+      <p data-i18n="loading.text">Initializing Solar Simulation...</p>
     </div>
   </div>
 

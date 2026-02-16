@@ -31,14 +31,25 @@
       "index.html",
       "style.css",
       "electron/**/*",
-      "node_modules/three/build/three.module.js",
-      "node_modules/three/examples/jsm/**/*",
-      "node_modules/chart.js/dist/chart.umd.min.js"
+      "!node_modules"
+    ],
+    "extraFiles": [
+      {
+        "from": "node_modules/three",
+        "to": "resources/app/node_modules/three"
+      },
+      {
+        "from": "node_modules/chart.js",
+        "to": "resources/app/node_modules/chart.js"
+      },
+      {
+        "from": "node_modules/@kurkle",
+        "to": "resources/app/node_modules/@kurkle"
+      }
     ],
     "win": {
       "target": [
-        { "target": "nsis",     "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        { "target": "dir", "arch": ["x64"] }
       ],
       "requestedExecutionLevel": "asInvoker"
     },

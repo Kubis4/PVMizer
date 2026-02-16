@@ -7,6 +7,7 @@
 
 import { SunSimulation }  from './SunSimulation.js';
 import { OBSTACLE_TYPES } from './ObstacleManager.js';
+import { setLanguage, getLanguage, t } from './i18n.js';
 
 const fmt     = (v, d = 1) => Number(v).toFixed(d);
 const fmtTime = h => {
@@ -109,7 +110,13 @@ export class UIController {
 
   updateMonthlyChart(monthly) {
     if (!this.monthlyChart) return;
-    this.monthlyChart.data.datasets[0].data = monthly.map(v => Math.round(v));
+    const rounded = monthly.map(v => Math.round(v));
+    const max = Math.max(...rounded, 1);
+    this.monthlyChart.data.datasets[0].data = rounded;
+    this.monthlyChart.data.datasets[0].backgroundColor = rounded.map(v => {
+      const t = v / max;
+      return `rgba(${Math.round(59+t*186)},${Math.round(130+t*28)},${Math.round(246-t*235)},0.75)`;
+    });
     this.monthlyChart.update('none');
   }
 
@@ -160,84 +167,104 @@ export class UIController {
   }
 
   // ─── Sun Dial SVG update ──────────────────────────────────────────────────
+  // Full semicircle = 24 hours: 0:00 (left) → 12:00 (top) → 24:00 (right)
+  // Yellow segment = daylight (sunrise→sunset). Sun always ON the arc.
   _updateSunDial(azimuth, elevation, sunrise, sunset, timeHours) {
-    // Arc geometry: semicircle from (20,120) to (220,120), center (120,120), r=100
-    // Angle 0 = West (left), PI = East (right) — maps azimuth 270°→0, 180°→PI/2, 90°→PI
     const CX = 120, CY = 120, R = 100;
 
-    // Convert azimuth (0=N, 90=E, 180=S, 270=W) to arc angle (0=W, PI/2=S, PI=E)
-    const azToAngle = (az) => {
-      // Normalize: W=270→0, S=180→PI/2, E=90→PI
-      const a = ((270 - az + 360) % 360) * Math.PI / 180;
-      return Math.max(0, Math.min(Math.PI, a));
-    };
+    // Map 0–24h linearly to arc angle PI→0 (left to right)
+    const hourToAngle = (h) => Math.PI * (1 - h / 24);
 
+    // Arc point from angle
     const arcPoint = (angle) => ({
-      x: CX - R * Math.cos(angle),
+      x: CX + R * Math.cos(angle),
       y: CY - R * Math.sin(angle)
     });
 
-    // Make SVG arc path from angle1 to angle2
+    // SVG arc from angle a1 to a2 (a1 > a2 = left to right)
     const makeArc = (a1, a2) => {
-      if (a1 >= a2) return '';
+      if (a1 - a2 < 0.001) return '';
       const p1 = arcPoint(a1);
       const p2 = arcPoint(a2);
-      const largeArc = (a2 - a1) > Math.PI ? 1 : 0;
+      const largeArc = (a1 - a2) > Math.PI ? 1 : 0;
       return `M ${p1.x},${p1.y} A ${R},${R} 0 ${largeArc},1 ${p2.x},${p2.y}`;
     };
 
-    // Daylight arc: sunrise to sunset
-    if (sunrise !== null && sunset !== null) {
-      const sunriseAngle = azToAngle(SunSimulation.calculateSolarPosition(
-        this.app.state.latitude, this.app.state.longitude, this.app.state.date, sunrise).azimuth);
-      const sunsetAngle  = azToAngle(SunSimulation.calculateSolarPosition(
-        this.app.state.latitude, this.app.state.longitude, this.app.state.date, sunset).azimuth);
-
-      const a1 = Math.min(sunriseAngle, sunsetAngle);
-      const a2 = Math.max(sunriseAngle, sunsetAngle);
-
-      const dayArc = document.getElementById('dialDayArc');
-      if (dayArc) dayArc.setAttribute('d', makeArc(a1, a2) || `M 20,120 A 100,100 0 0,1 220,120`);
-
-      // Sunrise / sunset marker positions
-      const sp1 = arcPoint(sunriseAngle);
-      const sp2 = arcPoint(sunsetAngle);
-      const srM = document.getElementById('dialSunriseMarker');
-      const ssM = document.getElementById('dialSunsetMarker');
-      if (srM) { srM.setAttribute('cx', sp1.x); srM.setAttribute('cy', sp1.y); }
-      if (ssM) { ssM.setAttribute('cx', sp2.x); ssM.setAttribute('cy', sp2.y); }
-
-      // Twilight arcs (dawn before sunrise, dusk after sunset)
-      const dawnStart = Math.max(0, sunrise - 1);   // ~1h before sunrise
-      const duskEnd   = Math.min(24, sunset + 1);    // ~1h after sunset
-      const dawnAngle = azToAngle(SunSimulation.calculateSolarPosition(
-        this.app.state.latitude, this.app.state.longitude, this.app.state.date, dawnStart).azimuth);
-      const duskAngle = azToAngle(SunSimulation.calculateSolarPosition(
-        this.app.state.latitude, this.app.state.longitude, this.app.state.date, duskEnd).azimuth);
-
-      const twL = document.getElementById('dialTwilightLeft');
-      const twR = document.getElementById('dialTwilightRight');
-      if (twL) twL.setAttribute('d', makeArc(Math.min(dawnAngle, sunriseAngle), Math.max(dawnAngle, sunriseAngle)));
-      if (twR) twR.setAttribute('d', makeArc(Math.min(sunsetAngle, duskAngle), Math.max(sunsetAngle, duskAngle)));
+    // Swap compass label for Southern hemisphere
+    const compassTop = document.getElementById('dialCompassTop');
+    if (compassTop) {
+      compassTop.textContent = this.app.state.latitude >= 0 ? 'S' : 'N';
     }
 
-    // Sun position on the arc
-    const sunAngle = azToAngle(azimuth);
-    const sunP     = arcPoint(sunAngle);
-    const sunIcon  = document.getElementById('dialSunIcon');
-    const sunGlow  = document.getElementById('dialSunGlow');
-    const isDay    = elevation > 0;
+    const isDay = elevation > 0;
+    const sunAngle = hourToAngle(timeHours);
+    const sunP = arcPoint(sunAngle);
+
+    // Daylight arc (yellow segment from sunrise to sunset)
+    const dayArc = document.getElementById('dialDayArc');
+    if (dayArc) {
+      if (sunrise !== null && sunset !== null && sunrise < sunset) {
+        dayArc.setAttribute('d', makeArc(hourToAngle(sunrise), hourToAngle(sunset)));
+      } else {
+        dayArc.setAttribute('d', '');
+      }
+    }
+
+    // Elapsed arc (orange, from sunrise to current time — only while daytime)
+    const elapsedArc = document.getElementById('dialDayArcElapsed');
+    if (elapsedArc) {
+      if (sunrise !== null && sunset !== null) {
+        if (isDay) {
+          elapsedArc.setAttribute('d', makeArc(hourToAngle(sunrise), sunAngle));
+        } else if (timeHours >= sunset) {
+          elapsedArc.setAttribute('d', makeArc(hourToAngle(sunrise), hourToAngle(sunset)));
+        } else {
+          elapsedArc.setAttribute('d', '');
+        }
+      } else {
+        elapsedArc.setAttribute('d', '');
+      }
+    }
+
+    // Sunrise / sunset markers on the arc
+    const srM = document.getElementById('dialSunriseMarker');
+    const ssM = document.getElementById('dialSunsetMarker');
+    if (sunrise !== null && sunset !== null) {
+      const srP = arcPoint(hourToAngle(sunrise));
+      const ssP = arcPoint(hourToAngle(sunset));
+      if (srM) { srM.setAttribute('cx', srP.x); srM.setAttribute('cy', srP.y); }
+      if (ssM) { ssM.setAttribute('cx', ssP.x); ssM.setAttribute('cy', ssP.y); }
+    }
+
+    // Clear twilight arcs (not needed with 24h arc)
+    const twL = document.getElementById('dialTwilightLeft');
+    const twR = document.getElementById('dialTwilightRight');
+    if (twL) twL.setAttribute('d', '');
+    if (twR) twR.setAttribute('d', '');
+
+    // Sun icon — always ON the arc
+    const sunIcon = document.getElementById('dialSunIcon');
+    const sunGlow = document.getElementById('dialSunGlow');
+
+    let sunColor = '#ffd700';
+    let sunOpacity = 1;
+    if (!isDay) {
+      sunColor = '#4a6fa5';
+      sunOpacity = 0.6;
+    } else if (elevation < 10) {
+      sunColor = elevation < 5 ? '#ff6600' : '#ffaa00';
+    }
 
     if (sunIcon) {
       sunIcon.setAttribute('cx', sunP.x);
-      sunIcon.setAttribute('cy', isDay ? sunP.y : CY);
-      sunIcon.setAttribute('opacity', isDay ? '1' : '0.3');
-      sunIcon.setAttribute('fill', isDay ? '#ffd700' : '#888');
+      sunIcon.setAttribute('cy', sunP.y);
+      sunIcon.setAttribute('fill', sunColor);
+      sunIcon.setAttribute('opacity', sunOpacity);
     }
     if (sunGlow) {
       sunGlow.setAttribute('cx', sunP.x);
-      sunGlow.setAttribute('cy', isDay ? sunP.y : CY);
-      sunGlow.setAttribute('opacity', isDay ? '0.6' : '0');
+      sunGlow.setAttribute('cy', sunP.y);
+      sunGlow.setAttribute('opacity', isDay ? 0.6 : 0);
     }
   }
 
@@ -484,6 +511,11 @@ export class UIController {
       if (e.target === settingsOverlay) settingsOverlay.style.display = 'none';
     });
 
+    // ── Language selector ────────────────────────────────────────────────────
+    document.getElementById('languageSelect')?.addEventListener('change', e => {
+      setLanguage(e.target.value);
+    });
+
     // ── Settings modal toggles ──────────────────────────────────────────────
     document.getElementById('showShadows')?.addEventListener('change', e => {
       this.app.state.shadowsEnabled = e.target.checked;
@@ -589,7 +621,7 @@ export class UIController {
   updateEquatorLayoutLabel(latitude) {
     const btn = document.querySelector('.layout-btn[data-layout="south"]');
     if (!btn) return;
-    btn.innerHTML = latitude >= 0 ? '&#x2600; South' : '&#x2600; North';
+    btn.textContent = latitude >= 0 ? t('layout.south') : t('layout.north');
   }
 
   _updateRoofSpecificUI(roofType) {
@@ -625,5 +657,121 @@ export class UIController {
     // Sync autoAdvance checkbox
     const cb = document.getElementById('autoAdvance');
     if (cb) cb.checked = this.app.state.autoAdvance;
+
+    // Mouse wheel on sun dial widget → adjust time
+    const dialWidget = document.querySelector('.sun-dial-widget');
+    if (dialWidget) {
+      dialWidget.addEventListener('wheel', e => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const step = 0.25; // 15-minute increments
+        const delta = e.deltaY < 0 ? step : -step;
+        this._adjustTime(delta);
+      }, { passive: false });
+    }
+
+    // Draggable sun icon on the arc
+    this._initSunDrag();
+  }
+
+  // ─── Helper: adjust time by delta hours ─────────────────────────────────
+  _adjustTime(delta) {
+    this.app.state.timeHours += delta;
+
+    if (this.app.state.timeHours >= 24) {
+      this.app.state.timeHours -= 24;
+      this.app.state.date = new Date(this.app.state.date.getTime() + 86400000);
+    } else if (this.app.state.timeHours < 0) {
+      this.app.state.timeHours += 24;
+      this.app.state.date = new Date(this.app.state.date.getTime() - 86400000);
+    }
+
+    this._syncTimeDisplay();
+  }
+
+  _setTime(hours) {
+    this.app.state.timeHours = Math.max(0, Math.min(24, hours));
+    this._syncTimeDisplay();
+  }
+
+  _syncTimeDisplay() {
+    const tSlider = document.getElementById('simTime');
+    const tVal    = document.getElementById('simTimeVal');
+    if (tSlider) tSlider.value = this.app.state.timeHours;
+    if (tVal)    tVal.textContent = fmtTime(this.app.state.timeHours);
+  }
+
+  // ─── Draggable sun on the arc ───────────────────────────────────────────
+  _initSunDrag() {
+    const svg = document.querySelector('.dial-svg');
+    const sunIcon = document.getElementById('dialSunIcon');
+    if (!svg || !sunIcon) return;
+
+    let dragging = false;
+
+    const svgPointFromEvent = (e) => {
+      const pt = svg.createSVGPoint();
+      const touch = e.touches ? e.touches[0] : e;
+      pt.x = touch.clientX;
+      pt.y = touch.clientY;
+      return pt.matrixTransform(svg.getScreenCTM().inverse());
+    };
+
+    const angleToTime = (arcAngle) => {
+      // 24h linear mapping: PI=0:00(left), PI/2=12:00(top), 0=24:00(right)
+      return 24 * (1 - arcAngle / Math.PI);
+    };
+
+    const mouseToArcAngle = (e) => {
+      const p = svgPointFromEvent(e);
+      const CX = 120, CY = 120;
+      const dx = p.x - CX;
+      const dy = CY - p.y;
+      // atan2(dy, dx) where dx>0 is right (angle 0=W), dx<0 is left (angle PI=E)
+      // For our arc: x = CX + R*cos(angle), so cos(angle) = dx/R
+      let angle = Math.atan2(dy, dx);
+      return Math.max(0, Math.min(Math.PI, angle));
+    };
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      e.preventDefault();
+      const angle = mouseToArcAngle(e);
+      this._setTime(angleToTime(angle));
+    };
+
+    const onEnd = () => {
+      if (!dragging) return;
+      dragging = false;
+      sunIcon.style.cursor = 'grab';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+    };
+
+    const onStart = (e) => {
+      dragging = true;
+      sunIcon.style.cursor = 'grabbing';
+      e.preventDefault();
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+    };
+
+    sunIcon.addEventListener('mousedown', onStart);
+    sunIcon.addEventListener('touchstart', onStart, { passive: false });
+
+    // Click anywhere on the arc to set time
+    svg.addEventListener('click', (e) => {
+      if (dragging) return;
+      const p = svgPointFromEvent(e);
+      const CY = 120;
+      if ((CY - p.y) < -5) return; // ignore clicks below horizon
+      const angle = mouseToArcAngle(e);
+      this._setTime(angleToTime(angle));
+    });
   }
 }

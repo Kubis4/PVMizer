@@ -364,6 +364,15 @@ function updateFaceLabels() {
 
 function onLocationChange() {
   sunSim.updateTrajectory(state.latitude, state.longitude, state.date, state.showSunPath);
+
+  // Flip camera to opposite side when hemisphere changes so sun trajectory is visible
+  const southSide = state.latitude >= 0;  // Northern hemisphere: camera on south (+Z)
+  const camZ = camera.position.z;
+  if ((southSide && camZ < 0) || (!southSide && camZ > 0)) {
+    camera.position.z = -camZ;
+    controls.update();
+  }
+
   // Reset saved orientations so hemisphere change picks correct default faces
   state._savedOrientations = null;
   state.activeFaces = new Set(
@@ -682,6 +691,32 @@ window.addEventListener('keydown', e => {
   }
 
 });
+
+// Mouse wheel: adjust simulation time (scroll up = forward, scroll down = backward)
+renderer.domElement.addEventListener('wheel', e => {
+  // Only adjust time when Shift is held; otherwise let OrbitControls zoom
+  if (!e.shiftKey) return;
+  e.preventDefault();
+
+  const step = 0.25; // 15-minute increments
+  const delta = e.deltaY < 0 ? step : -step;
+  state.timeHours += delta;
+
+  // Wrap around midnight
+  if (state.timeHours >= 24) {
+    state.timeHours -= 24;
+    state.date = new Date(state.date.getTime() + 86400000);
+  } else if (state.timeHours < 0) {
+    state.timeHours += 24;
+    state.date = new Date(state.date.getTime() - 86400000);
+  }
+
+  // Sync slider and display
+  const slider = document.getElementById('simTime');
+  const valEl  = document.getElementById('simTimeVal');
+  if (slider) slider.value = state.timeHours;
+  if (valEl)  valEl.textContent = fmtTime(state.timeHours);
+}, { passive: false });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Animation loop
