@@ -59,7 +59,14 @@ export class EnergyCalc {
     const albedo    = 0.2;
     const reflected = ghi * albedo * (1 - cosTilt) / 2;
 
-    return beam + diffuse + reflected;
+    return (beam + diffuse + reflected);
+  }
+
+  /**
+   * Apply weather condition multiplier to POA irradiance.
+   */
+  static applyWeather(poa, weatherMultiplier = 1.0) {
+    return poa * weatherMultiplier;
   }
 
   /**
@@ -84,15 +91,16 @@ export class EnergyCalc {
    * @param {number} elevationDeg
    * @returns {{ totalWatts, panelData: Array<{poa, power, efficiency}> }}
    */
-  static calculateSystemPower(panels, sunVector, ghi, elevationDeg) {
+  static calculateSystemPower(panels, sunVector, ghi, elevationDeg, weatherMultiplier = 1.0) {
     let totalWatts = 0;
     const panelData = [];
 
     for (const mesh of panels) {
       const { normal, efficiency, area, shadingFactor = 0 } = mesh.userData;
       if (!normal) continue;
-      const poa   = EnergyCalc.calculatePOA(normal, sunVector, ghi, elevationDeg, shadingFactor);
-      const power = EnergyCalc.calculatePanelPower(poa, efficiency, area);
+      const rawPoa = EnergyCalc.calculatePOA(normal, sunVector, ghi, elevationDeg, shadingFactor);
+      const poa    = EnergyCalc.applyWeather(rawPoa, weatherMultiplier);
+      const power  = EnergyCalc.calculatePanelPower(poa, efficiency, area);
       totalWatts += power;
       panelData.push({ poa, power, efficiency });
     }
@@ -108,7 +116,7 @@ export class EnergyCalc {
    * @param {Array<{normal, efficiency, area, shadingFactor}>} panelInfos
    * @returns {Array<{hour, power}>}
    */
-  static calculateDayCurve(lat, lon, date, panelInfos) {
+  static calculateDayCurve(lat, lon, date, panelInfos, weatherMultiplier = 1.0) {
     const result = [];
     for (let h = 0; h <= 24; h += 10 / 60) {
       const pos  = SunSimulation.calculateSolarPosition(lat, lon, date, h);
@@ -116,7 +124,8 @@ export class EnergyCalc {
       const sunV = SunSimulation.getSunVector(pos.elevation, pos.azimuth);
       let watts = 0;
       for (const p of panelInfos) {
-        const poa = EnergyCalc.calculatePOA(p.normal, sunV, ghi, pos.elevation, p.shadingFactor || 0);
+        const rawPoa = EnergyCalc.calculatePOA(p.normal, sunV, ghi, pos.elevation, p.shadingFactor || 0);
+        const poa = EnergyCalc.applyWeather(rawPoa, weatherMultiplier);
         watts += EnergyCalc.calculatePanelPower(poa, p.efficiency, p.area);
       }
       result.push({ hour: h, power: watts });
@@ -138,14 +147,14 @@ export class EnergyCalc {
    * Calculate monthly energy totals (12 values).
    * Uses ASHRAE representative days for each month.
    */
-  static calculateMonthlyEnergy(lat, lon, year, panelInfos) {
+  static calculateMonthlyEnergy(lat, lon, year, panelInfos, weatherMultiplier = 1.0) {
     const repDayOfMonth = [17, 16, 16, 15, 15, 11, 17, 16, 15, 15, 14, 10];
     const daysInMonth   = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     const monthly = [];
 
     for (let m = 0; m < 12; m++) {
       const date     = new Date(year, m, repDayOfMonth[m]);
-      const curve    = EnergyCalc.calculateDayCurve(lat, lon, date, panelInfos);
+      const curve    = EnergyCalc.calculateDayCurve(lat, lon, date, panelInfos, weatherMultiplier);
       const dailyKwh = EnergyCalc.integrateDayCurve(curve);
       monthly.push(dailyKwh * daysInMonth[m]);
     }

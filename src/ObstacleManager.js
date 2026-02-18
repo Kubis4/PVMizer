@@ -9,11 +9,12 @@ import * as THREE from 'three';
 // Obstacle type definitions
 // footprint = physical bounding radius of the obstacle model at scale 1.0
 export const OBSTACLE_TYPES = {
-  chimney:  { label: 'Chimney',      icon: '🧱', roofOnly: true,  footprint: 0.40, shadingFactor: 0.15 },
-  skylight: { label: 'Skylight',     icon: '🪟', roofOnly: true,  footprint: 0.50, shadingFactor: 0.05 },
-  hvac:     { label: 'HVAC Unit',    icon: '❄',  roofOnly: true,  footprint: 0.72, shadingFactor: 0.10 },
-  tree:     { label: 'Tree',         icon: '🌳', roofOnly: false, footprint: 1.10, shadingFactor: 0.40 },
-  pole:     { label: 'Utility Pole', icon: '⚡', roofOnly: false, footprint: 0.15, shadingFactor: 0.20 },
+  chimney:   { label: 'Chimney',      icon: '🧱', roofOnly: true,  footprint: 0.40, shadingFactor: 0.15 },
+  skylight:  { label: 'Skylight',     icon: '🪟', roofOnly: true,  footprint: 0.50, shadingFactor: 0.05 },
+  hvac:      { label: 'HVAC Unit',    icon: '❄',  roofOnly: true,  footprint: 0.72, shadingFactor: 0.10 },
+  tree:      { label: 'Pine Tree',    icon: '🌲', roofOnly: false, footprint: 1.10, shadingFactor: 0.40 },
+  leaftree:  { label: 'Leaf Tree',    icon: '🌳', roofOnly: false, footprint: 1.30, shadingFactor: 0.45 },
+  pole:      { label: 'Utility Pole', icon: '⚡', roofOnly: false, footprint: 0.15, shadingFactor: 0.20 },
 };
 
 export class ObstacleManager {
@@ -180,7 +181,7 @@ export class ObstacleManager {
   // ─── Obstacle operations ─────────────────────────────────────────────────
   // Rotate group so its local +Y aligns with hitNormal (skip for chimney/tree/pole)
   _alignGroupToSurface(group, type, hitNormal) {
-    if (['chimney', 'tree', 'pole'].includes(type)) return;
+    if (['chimney', 'tree', 'leaftree', 'pole'].includes(type)) return;
     const up = new THREE.Vector3(0, 1, 0);
     if (hitNormal.dot(up) < 0.9999) {
       const q = new THREE.Quaternion().setFromUnitVectors(up, hitNormal);
@@ -421,6 +422,7 @@ export class ObstacleManager {
       case 'skylight': this._buildSkylight(group, opac, transp); break;
       case 'hvac':     this._buildHVAC(group, opac, transp);     break;
       case 'tree':     this._buildTree(group, opac, transp);     break;
+      case 'leaftree': this._buildLeafTree(group, opac, transp); break;
       case 'pole':     this._buildPole(group, opac, transp);     break;
     }
 
@@ -551,6 +553,31 @@ export class ObstacleManager {
       cone.position.y   = fd.y;
       cone.rotation.y   = (i * 0.7); // slight rotation per tier
       group.add(cone);
+    });
+  }
+
+  _buildLeafTree(group, opacity, transparent) {
+    // Trunk — taller and slightly thicker than pine
+    const trunkMat = this._mat(0x6b4226, 0.95, 0.0, opacity, transparent);
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.20, 2.40, 8), trunkMat
+    );
+    trunk.position.y = 1.20;
+    group.add(trunk);
+
+    // Canopy — rounded spheres for deciduous foliage
+    const canopyColors = [0x2d6b2d, 0x3a8a3a, 0x278a27];
+    const canopyData = [
+      { r: 1.40, x:  0.0,  y: 3.40, z:  0.0  },
+      { r: 1.10, x:  0.55, y: 3.90, z:  0.30 },
+      { r: 1.10, x: -0.50, y: 3.80, z: -0.25 },
+      { r: 0.85, x:  0.15, y: 4.50, z: -0.20 },
+    ];
+    canopyData.forEach((cd, i) => {
+      const mat = this._mat(canopyColors[i % canopyColors.length], 0.95, 0.0, opacity, transparent);
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(cd.r, 10, 8), mat);
+      sphere.position.set(cd.x, cd.y, cd.z);
+      group.add(sphere);
     });
   }
 

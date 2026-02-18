@@ -6,9 +6,12 @@
 export class ProjectData {
   constructor(data = {}) {
     this.name              = data.name              || 'My Project';
-    this.address           = data.address           || '';
-    this.buildingType      = data.buildingType      || 'residential';
-    this.annualConsumption = data.annualConsumption || 5000;   // kWh/yr
+    this.roofType          = data.roofType          || 'flat';
+    this.houseWidth        = data.houseWidth        || 10;
+    this.houseDepth        = data.houseDepth        || 10;
+    this.wallHeight        = data.wallHeight        || 3;
+    this.roofPitch         = data.roofPitch         || 30;
+    this.annualConsumption = data.annualConsumption  || 5000;   // kWh/yr
     this.tariff            = data.tariff            || 0.30;   // €/kWh
     this.feedInTariff      = data.feedInTariff      || 0.08;   // €/kWh
     this.lifetime          = data.lifetime          || 25;     // years
@@ -25,7 +28,7 @@ export class ProjectData {
    * Assumes 70% self-consumption rate for residential, 50% for commercial/industrial.
    */
   getAnnualSavings(annualProductionKwh) {
-    const selfRate     = this.buildingType === 'residential' ? 0.70 : 0.50;
+    const selfRate     = 0.70;
     const selfConsumed = Math.min(annualProductionKwh, this.annualConsumption) * selfRate;
     const exported     = Math.max(0, annualProductionKwh - selfConsumed);
     return selfConsumed * this.tariff + exported * this.feedInTariff;
@@ -34,7 +37,7 @@ export class ProjectData {
   /** Self-consumption percentage (0–100) */
   getSelfConsumptionRate(annualProductionKwh) {
     if (annualProductionKwh <= 0) return 0;
-    const selfRate = this.buildingType === 'residential' ? 0.70 : 0.50;
+    const selfRate = 0.70;
     const selfConsumed = Math.min(annualProductionKwh, this.annualConsumption) * selfRate;
     return Math.min(100, (selfConsumed / annualProductionKwh) * 100);
   }

@@ -17,6 +17,19 @@
 <body>
   <canvas id="canvas"></canvas>
 
+  <!-- Project name header (visible only in project mode) -->
+  <div id="projectNameHeader" class="project-name-header" style="display:none">
+    <span id="projectNameText" class="project-name-text" title="Click to edit project">My Solar Project</span>
+    <button id="exportPdfBtn" class="project-header-icon-btn" title="Export PDF Report">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="18" x2="12" y2="12"/>
+        <polyline points="9 15 12 18 15 15"/>
+      </svg>
+    </button>
+  </div>
+
   <!-- Fixed restore tabs (visible only when respective panel is collapsed) -->
   <button class="panel-restore-btn panel-restore-left" id="restoreLeft" data-i18n="btn.showControls" data-i18n-attr="title" title="Show controls">&#x25BA;</button>
   <button class="panel-restore-btn panel-restore-right" id="restoreRight" data-i18n="btn.showEnergy" data-i18n-attr="title" title="Show energy output">&#x25C4;</button>
@@ -260,6 +273,46 @@
           <div class="placement-pills">
             <button class="orientation-btn active" data-orient="portrait" data-i18n="orient.portrait">Portrait</button>
             <button class="orientation-btn" data-orient="landscape" data-i18n="orient.landscape">Landscape</button>
+            <button class="orientation-btn" data-orient="alt-rows">Max Fill</button>
+          </div>
+        </div>
+        <!-- Panel fill strategy (global default) — hidden in sandbox mode -->
+        <div class="placement-toggle" id="fillOrderToggle" style="margin-top:6px">
+          <span class="toggle-label">Fill Order</span>
+          <div class="placement-pills">
+            <button class="fill-btn active" data-fill="bottom-up">&#x2B06; Bottom</button>
+            <button class="fill-btn" data-fill="top-down">&#x2B07; Top</button>
+            <button class="fill-btn" data-fill="center-out">&#x25CE; Center</button>
+          </div>
+        </div>
+        <!-- Panel count display (project mode only) -->
+        <div class="panel-count-display" id="panelCountDisplay" style="display:none">
+          <span>Placed: <strong id="panelCountPlaced">0</strong></span>
+          <span id="panelCountRemainingWrap" style="display:none">
+            &nbsp;| Remaining: <strong id="panelCountRemaining">0</strong>
+          </span>
+        </div>
+        <!-- Per-face config (shown when a face is selected) -->
+        <div id="faceConfigPanel" class="face-config-panel" style="display:none">
+          <div class="face-config-header">
+            <span class="face-config-title">Face <span id="faceConfigName">--</span></span>
+            <button class="face-config-reset" id="faceConfigReset">Reset</button>
+          </div>
+          <div class="placement-toggle" style="margin-top:4px">
+            <span class="toggle-label">Orientation</span>
+            <div class="placement-pills">
+              <button class="fill-btn face-orient-btn" data-orient="portrait">Portrait</button>
+              <button class="fill-btn face-orient-btn" data-orient="landscape">Landscape</button>
+              <button class="fill-btn face-orient-btn" data-orient="alt-rows">Max Fill</button>
+            </div>
+          </div>
+          <div class="placement-toggle" style="margin-top:4px">
+            <span class="toggle-label">Fill Order</span>
+            <div class="placement-pills">
+              <button class="fill-btn face-fill-btn" data-fill="bottom-up">Bottom</button>
+              <button class="fill-btn face-fill-btn" data-fill="top-down">Top</button>
+              <button class="fill-btn face-fill-btn" data-fill="center-out">Center</button>
+            </div>
           </div>
         </div>
       </div>
@@ -363,10 +416,6 @@
           <span class="info-label" data-i18n="label.annualEnergy">Annual Energy</span>
           <span class="info-value" id="annualEnergy">-- MWh</span>
         </div>
-        <div class="info-item">
-          <span class="info-label" data-i18n-html="label.co2Saved">CO&#x2082; Saved</span>
-          <span class="info-value" id="co2Saved">-- t/yr</span>
-        </div>
       </div>
     </section>
 
@@ -400,10 +449,6 @@
           <span class="info-value proj-green" id="projLifetime">--</span>
         </div>
         <div class="info-item">
-          <span class="info-label" data-i18n-html="label.co2Reduction">CO&#x2082; Reduction</span>
-          <span class="info-value" id="projCO2">--</span>
-        </div>
-        <div class="info-item">
           <span class="info-label" data-i18n="label.selfConsumption">Self-Consumption</span>
           <span class="info-value" id="projSelfConsume">--</span>
         </div>
@@ -433,7 +478,8 @@
     <button class="obstacle-btn" data-type="chimney" title="Chimney" data-i18n-html="obs.chimney">&#x1F9F1; Chimney</button>
     <button class="obstacle-btn" data-type="skylight" title="Skylight" data-i18n-html="obs.skylight">&#x1FA9F; Skylight</button>
     <button class="obstacle-btn" data-type="hvac" title="HVAC Unit" data-i18n-html="obs.hvac">&#x2744; HVAC</button>
-    <button class="obstacle-btn" data-type="tree" title="Tree" data-i18n-html="obs.tree">&#x1F333; Tree</button>
+    <button class="obstacle-btn" data-type="tree" title="Pine Tree" data-i18n-html="obs.tree">&#x1F332; Pine</button>
+    <button class="obstacle-btn" data-type="leaftree" title="Leaf Tree">&#x1F333; Leaf</button>
     <button class="obstacle-btn" data-type="pole" title="Utility Pole" data-i18n-html="obs.pole">&#x26A1; Pole</button>
     <button class="obstacle-btn-delete" id="deleteAllObstaclesBtn" title="Remove all obstacles" data-i18n-html="obs.clear">&#x1F5D1; Clear</button>
     <div id="obstacleSizeRow" class="obstacle-size-row" style="display:none">
@@ -469,6 +515,16 @@
     <div class="info-bar-item">
       <span class="ib-label" data-i18n="ib.panels">Panels</span>
       <span class="ib-value" id="ibPanels">--</span>
+    </div>
+    <div class="info-bar-item">
+      <span class="ib-label">Weather</span>
+      <select class="ib-weather-select" id="weatherSelect">
+        <option value="clear">&#x2600;&#xFE0F; Clear</option>
+        <option value="partly_cloudy">&#x26C5; Partly Cloudy</option>
+        <option value="cloudy">&#x2601;&#xFE0F; Cloudy</option>
+        <option value="rainy">&#x1F327;&#xFE0F; Rainy</option>
+        <option value="snowy">&#x1F328;&#xFE0F; Snowy</option>
+      </select>
     </div>
     <div class="info-bar-item heatmap-item">
       <button class="heatmap-btn" id="heatmapToggleBtn" title="Toggle irradiance heatmap">
@@ -565,6 +621,8 @@
   </div>
 
   <script src="./node_modules/chart.js/dist/chart.umd.min.js"></script>
+  <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+  <script src="./node_modules/html2canvas/dist/html2canvas.min.js"></script>
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

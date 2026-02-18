@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "chart.js": "^4.4.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.1.0",
     "three": "^0.163.0"
   },
   "devDependencies": {
-    "electron": "^31.0.0",
+    "electron": "^31.7.7",
     "electron-builder": "^24.13.3"
   },
   "build": {
@@ -45,11 +47,24 @@
       {
         "from": "node_modules/@kurkle",
         "to": "resources/app/node_modules/@kurkle"
+      },
+      {
+        "from": "node_modules/jspdf",
+        "to": "resources/app/node_modules/jspdf"
+      },
+      {
+        "from": "node_modules/html2canvas",
+        "to": "resources/app/node_modules/html2canvas"
       }
     ],
     "win": {
       "target": [
-        { "target": "dir", "arch": ["x64"] }
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "requestedExecutionLevel": "asInvoker"
     },

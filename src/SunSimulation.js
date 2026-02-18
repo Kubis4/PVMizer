@@ -201,7 +201,7 @@ export class SunSimulation {
   }
 
   // ───────── Update Scene ─────────
-  update(lat, lon, date, timeHours, shadowsEnabled) {
+  update(lat, lon, date, timeHours, shadowsEnabled, weatherCondition = 'clear') {
     const pos = SunSimulation.calculateSolarPosition(lat, lon, date, timeHours);
     this.sunPosition = pos;
     this.sunVector = SunSimulation.getSunVector(pos.elevation, pos.azimuth);
@@ -217,33 +217,47 @@ export class SunSimulation {
     this.sunSphere.visible = isDay;
     this.sunGlow.visible   = isDay && pos.elevation > 0;
 
+    // Weather-dependent visual parameters
+    const weatherParams = {
+      clear:         { turbidity: 6,  sunFactor: 1.0,  rayleigh: 2,   mie: 0.005, glowOp: 1.0 },
+      partly_cloudy: { turbidity: 8,  sunFactor: 0.7,  rayleigh: 1.5, mie: 0.01,  glowOp: 0.5 },
+      cloudy:        { turbidity: 12, sunFactor: 0.35, rayleigh: 0.8, mie: 0.02,  glowOp: 0.15 },
+      rainy:         { turbidity: 15, sunFactor: 0.20, rayleigh: 0.5, mie: 0.03,  glowOp: 0.05 },
+      snowy:         { turbidity: 10, sunFactor: 0.25, rayleigh: 0.6, mie: 0.025, glowOp: 0.1 },
+    };
+    const wp = weatherParams[weatherCondition] || weatherParams.clear;
+
     // Directional light
     this.sunLight.position.copy(sunWorldPos);
     this.sunLight.visible = pos.elevation > 0;
     this.sunLight.castShadow = shadowsEnabled && pos.elevation > 0;
 
-    // Light intensity / color based on elevation
+    // Light intensity / color based on elevation + weather
     const elevNorm = Math.max(0, Math.min(1, pos.elevation / 90));
-    this.sunLight.intensity = 1.5 * Math.pow(elevNorm, 0.4) + 0.05;
+    this.sunLight.intensity = (1.5 * Math.pow(elevNorm, 0.4) + 0.05) * wp.sunFactor;
     this.sunLight.color.set(this._sunColor(pos.elevation));
 
+    // Sun glow opacity affected by weather
+    if (this.sunGlow.material) {
+      this.sunGlow.material.opacity = wp.glowOp;
+    }
+
     // Sky parameters — match +Z=South convention
-    // Three.js spherical: theta=0→+Z (+Z=South). skyTheta = π - az maps az=180(S)→theta=0→+Z ✓
     const skyPhi   = Math.PI / 2 - pos.elevationRad;
     const skyTheta = Math.PI - pos.azimuthRad;
     const uniforms = this.sky.material.uniforms;
-    uniforms['turbidity'].value = 6;
-    uniforms['rayleigh'].value  = isDay ? 2 : 0.1;
-    uniforms['mieCoefficient'].value = 0.005;
+    uniforms['turbidity'].value = wp.turbidity;
+    uniforms['rayleigh'].value  = isDay ? wp.rayleigh : 0.1;
+    uniforms['mieCoefficient'].value = wp.mie;
     uniforms['mieDirectionalG'].value = 0.8;
     const sunDir = new THREE.Vector3().setFromSphericalCoords(1, skyPhi, skyTheta);
     uniforms['sunPosition'].value.copy(sunDir);
 
-    // Hemisphere light adapts to sky color
+    // Hemisphere light adapts to sky color + weather
     const skyColor = this._skyColor(pos.elevation);
     this.hemiLight.color.set(skyColor);
     this.hemiLight.groundColor.set(0x8B7355);
-    this.hemiLight.intensity = isDay ? 0.4 + elevNorm * 0.3 : 0.05;
+    this.hemiLight.intensity = (isDay ? 0.4 + elevNorm * 0.3 : 0.05) * wp.sunFactor;
   }
 
   updateTrajectory(lat, lon, date, visible) {

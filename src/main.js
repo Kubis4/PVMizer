@@ -19,6 +19,8 @@ import { StartupScreen }                   from './StartupScreen.js';
 import { ProjectData }                     from './ProjectData.js';
 import { HelpModal }                       from './HelpModal.js';
 import { ObstacleManager, OBSTACLE_TYPES } from './ObstacleManager.js';
+import { PanelRecommender }               from './PanelRecommender.js';
+import { WeatherEffects }                from './WeatherEffects.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Application state
@@ -67,13 +69,41 @@ const state = {
   // App mode
   appMode:         'sandbox',  // 'sandbox' | 'project'
   projectData:     null,       // ProjectData instance when in project mode
+
+  // Weather
+  weatherCondition:  'clear',
+  weatherMultiplier: 1.0,
+
+  // Panel fill strategy
+  fillStrategy:    'bottom-up',  // 'bottom-up' | 'top-down' | 'center-out'
+
+  // Per-face overrides
+  faceConfig:    {},    // { [faceIdx]: { fillStrategy?, panelOrientation? } }
+  selectedFace:  null,  // index of face selected for per-face config
 };
+
+// Weather multiplier lookup
+const WEATHER_MULTIPLIERS = {
+  clear:          1.00,
+  partly_cloudy:  0.75,
+  cloudy:         0.45,
+  rainy:          0.25,
+  snowy:          0.20,
+};
+
+function getFaceConfig(faceIdx) {
+  const override = state.faceConfig[faceIdx] || {};
+  return {
+    fillStrategy:     override.fillStrategy     || state.fillStrategy,
+    panelOrientation: override.panelOrientation  || state.panelOrientation,
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Three.js setup
 // ─────────────────────────────────────────────────────────────────────────────
 const canvas   = document.getElementById('canvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled   = true;
@@ -115,6 +145,7 @@ const solarPanels     = new SolarPanels(scene);
 const obstacleManager = new ObstacleManager(scene);
 // Notify UI when an obstacle is selected/deselected
 obstacleManager.onSelect = (obs) => { if (ui) ui.showObstacleControls(obs); };
+const weatherEffects  = new WeatherEffects(scene);
 const helpModal      = new HelpModal();
 const startupScreen  = new StartupScreen();
 
@@ -152,11 +183,56 @@ function setBuildingRotation(deg) {
 
 const app = {
   state, renderer, scene, camera, sunSim, solarPanels, groundMesh,
-  obstacleManager, helpModal, startupScreen, bloomPass,
+  obstacleManager, weatherEffects, helpModal, startupScreen, bloomPass, composer,
   setRoofType, rebuildRoof, rebuildPanels,
   onLocationChange, setPanelDimensions: applyPanelDimensions,
   updateProjectFinancials,
   setBuildingRotation,
+  setWeather(condition) {
+    state.weatherCondition  = condition;
+    state.weatherMultiplier = WEATHER_MULTIPLIERS[condition] || 1.0;
+    weatherEffects.setCondition(condition);
+    recalcDayCurve();
+  },
+  applyMode(mode, data) { applyMode(mode, data); },
+
+  resetToDefaults() {
+    state.appMode = 'sandbox';
+    state.projectData = null;
+    state.roofType = 'flat';
+    state.houseWidth = 10; state.houseDepth = 10;
+    state.wallHeight = 3; state.roofPitch = 30;
+    state.buildingRotation = 0;
+    state._savedOrientations = null;
+    obstacleManager.deleteAll();
+    const finPanel = document.getElementById('financialSection');
+    if (finPanel) finPanel.style.display = 'none';
+    const fillToggle = document.getElementById('fillOrderToggle');
+    if (fillToggle) fillToggle.style.display = 'none';
+    const panelCountEl = document.getElementById('panelCountDisplay');
+    if (panelCountEl) panelCountEl.style.display = 'none';
+    const projHeader = document.getElementById('projectNameHeader');
+    if (projHeader) projHeader.style.display = 'none';
+    rebuildRoof();
+    syncUIToState();
+  },
+
+  getChartsForExport() {
+    return {
+      powerChart:   ui?.powerChart,
+      monthlyChart: ui?.monthlyChart,
+    };
+  },
+
+  getCurrentStats() {
+    return {
+      panelCount: solarPanels.count,
+      peakPowerKw,
+      annualKwh: monthlyEnergy.reduce((a, b) => a + b, 0),
+      monthlyEnergy,
+      dayCurve,
+    };
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +244,14 @@ function setRoofType(type) {
 }
 
 function rebuildRoof() {
+  // Save per-face config keyed by orientation name before clearing faces
+  state._savedFaceConfigs = {};
+  for (const [idx, conf] of Object.entries(state.faceConfig)) {
+    const orient = roofFaces[idx]?.orientation;
+    if (orient) state._savedFaceConfigs[orient] = conf;
+  }
+  state.selectedFace = null;
+
   if (roofGroup) {
     scene.remove(roofGroup);
     roofGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); });
@@ -222,6 +306,15 @@ function rebuildRoof() {
     );
   }
 
+  // Restore per-face config from orientation names
+  state.faceConfig = {};
+  if (state._savedFaceConfigs) {
+    for (let i = 0; i < roofFaces.length; i++) {
+      const saved = state._savedFaceConfigs[roofFaces[i].orientation];
+      if (saved) state.faceConfig[i] = { ...saved };
+    }
+  }
+
   rebuildPanels();
   updateFaceLabels();
   buildHeatmapOverlay();
@@ -261,14 +354,14 @@ function getSunFacingFaces(faces, latitude) {
 }
 
 function rebuildPanels() {
-  const facesToPlace = roofFaces.filter((_, i) => state.activeFaces.has(i));
+  const activeFaceIndices = [...state.activeFaces].sort((a, b) => a - b);
+  const facesToPlace = activeFaceIndices.map(i => roofFaces[i]);
 
-  // Swap width/height for landscape orientation
-  const isLandscape = state.panelOrientation === 'landscape';
-  const panelW = isLandscape ? state.panelHeight : state.panelWidth;
-  const panelH = isLandscape ? state.panelWidth  : state.panelHeight;
+  // Base panel dimensions (un-swapped — per-face orientation applied in SolarPanels)
+  const basePanelW = state.panelWidth;
+  const basePanelH = state.panelHeight;
   // Derive efficiency from nominal Wp and actual panel area
-  state.panelEfficiency = state.panelNominalWp / (panelW * panelH * 1000);
+  state.panelEfficiency = state.panelNominalWp / (basePanelW * basePanelH * 1000);
   // Equator direction: south (-Z) for NH, north (+Z) for SH (matches visual compass)
   const equatorDir  = new THREE.Vector3(0, 0, state.latitude >= 0 ? -1 : 1);
   const isFlatRoof  = state.roofType === 'flat';
@@ -276,29 +369,81 @@ function rebuildPanels() {
   const flatTiltDeg = isFlatRoof ? state.panelTilt : 0;
   const flatLayout  = isFlatRoof ? state.flatLayout : 'south';
 
+  // Build per-face configuration array (parallel to facesToPlace)
+  const perFaceConfig = activeFaceIndices.map(faceIdx => getFaceConfig(faceIdx));
+
   // Build gridData — use same grid parameters as SolarPanels so cell indices match
   const gridData = {};
   for (let j = 0; j < facesToPlace.length; j++) {
+    const fc = perFaceConfig[j];
+    const orient = fc.panelOrientation;
+    const isMixed = orient === 'alt-rows';
+    const isLand  = orient === 'landscape';
+    // Alt-rows uses max dimension for column spacing
+    const pw = isMixed ? Math.max(basePanelW, basePanelH)
+             : isLand  ? basePanelH : basePanelW;
+    const ph = isMixed ? basePanelH
+             : isLand  ? basePanelW : basePanelH;
     const blocked = obstacleManager.getBlockedCells(
-      facesToPlace[j], panelW, panelH, state.panelGap,
+      facesToPlace[j], pw, ph, state.panelGap,
       { isFlatRoof, flatTiltDeg, equatorDir, flatLayout }
     );
     gridData[j] = { blockedCells: blocked, enabledCells: null };
   }
 
+  // In project mode, cap panel count to the recommended maximum
+  let maxPanels = Infinity;
+  if (state.appMode === 'project' && state.projectData) {
+    const rec = PanelRecommender.recommend({
+      roofType:     state.roofType,
+      houseWidth:   state.houseWidth,
+      houseDepth:   state.houseDepth,
+      roofPitch:    state.roofPitch,
+      panelWidth:   basePanelW,
+      panelHeight:  basePanelH,
+      panelGap:     state.panelGap,
+      panelNominalWp:    state.panelNominalWp,
+      annualConsumption: state.projectData.annualConsumption,
+      latitude:          state.latitude,
+    });
+    maxPanels = rec.recommendedPanels;
+  }
+
   solarPanels.placePanels(facesToPlace, {
     efficiency:    state.panelEfficiency,
     gapSize:       state.panelGap,
-    panelW,
-    panelH,
+    panelW:        basePanelW,
+    panelH:        basePanelH,
     gridData,
     flatTiltDeg,
     equatorDir,
     flatLayout,
+    maxPanels,
+    perFaceConfig,
   });
 
   peakPowerKw = EnergyCalc.peakPower(solarPanels.getPanelInfos());
   recalcDayCurve();
+
+  // Update panel count overlay: show "placed / max" in project mode
+  const ibPanels = document.getElementById('ibPanels');
+  if (ibPanels) {
+    ibPanels.textContent = maxPanels < Infinity
+      ? `${solarPanels.count} / ${maxPanels}`
+      : `${solarPanels.count}`;
+  }
+
+  // Update panel count display (placed / remaining)
+  const countEl = document.getElementById('panelCountPlaced');
+  if (countEl) countEl.textContent = solarPanels.count;
+  const remWrap = document.getElementById('panelCountRemainingWrap');
+  const remEl   = document.getElementById('panelCountRemaining');
+  if (maxPanels < Infinity && remWrap && remEl) {
+    remWrap.style.display = '';
+    remEl.textContent = Math.max(0, maxPanels - solarPanels.count);
+  } else if (remWrap) {
+    remWrap.style.display = 'none';
+  }
 
   if (state.appMode === 'project') updateProjectFinancials();
 }
@@ -314,9 +459,18 @@ let _faceLabelSprites = [];
 
 function toggleFace(faceIdx) {
   if (state.activeFaces.has(faceIdx)) {
-    state.activeFaces.delete(faceIdx);
+    if (state.selectedFace === faceIdx) {
+      // Third click: deactivate the face
+      state.activeFaces.delete(faceIdx);
+      state.selectedFace = null;
+    } else {
+      // Second click: select face for per-face config
+      state.selectedFace = faceIdx;
+    }
   } else {
+    // First click: activate the face
     state.activeFaces.add(faceIdx);
+    state.selectedFace = faceIdx;
   }
   // Save active orientations so they survive roof rebuilds
   state._savedOrientations = new Set(
@@ -324,6 +478,7 @@ function toggleFace(faceIdx) {
   );
   rebuildPanels();
   updateFaceLabels();
+  if (ui) ui.showFaceConfig(state.selectedFace, state.faceConfig, roofFaces, state);
 }
 
 function updateFaceLabels() {
@@ -390,13 +545,13 @@ function recalcDayCurve() {
 
   setTimeout(() => {
     dayCurve = EnergyCalc.calculateDayCurve(
-      state.latitude, state.longitude, state.date, panelInfos
+      state.latitude, state.longitude, state.date, panelInfos, state.weatherMultiplier
     );
     ui.updateDayCurve(dayCurve, state.timeHours, peakPowerKw);
 
     setTimeout(() => {
       monthlyEnergy = EnergyCalc.calculateMonthlyEnergy(
-        state.latitude, state.longitude, state.date.getFullYear(), panelInfos
+        state.latitude, state.longitude, state.date.getFullYear(), panelInfos, state.weatherMultiplier
       );
       ui.updateMonthlyChart(monthlyEnergy);
       if (state.appMode === 'project') updateProjectFinancials();
@@ -412,6 +567,27 @@ function updateProjectFinancials() {
   if (!state.projectData || !ui) return;
   const annualKwh = monthlyEnergy.reduce((a, b) => a + b, 0);
   ui.updateProjectPanel(state.projectData, peakPowerKw, annualKwh);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sync UI controls to current state (used when project mode pre-configures state)
+// ─────────────────────────────────────────────────────────────────────────────
+function syncUIToState() {
+  const setSlider = (id, valId, value, fmt) => {
+    const slider = document.getElementById(id);
+    const display = document.getElementById(valId);
+    if (slider) slider.value = value;
+    if (display) display.textContent = fmt(value);
+  };
+  setSlider('houseWidth',  'houseWidthVal',  state.houseWidth,  v => `${v.toFixed(1)}m`);
+  setSlider('houseDepth',  'houseDepthVal',  state.houseDepth,  v => `${v.toFixed(1)}m`);
+  setSlider('wallHeight',  'wallHeightVal',  state.wallHeight,  v => `${v.toFixed(2)}m`);
+  setSlider('roofPitch',   'roofPitchVal',   state.roofPitch,   v => `${v}\u00B0`);
+
+  // Sync roof type buttons
+  document.querySelectorAll('.roof-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.roof === state.roofType);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -747,12 +923,19 @@ function animate() {
     if (valEl)  valEl.textContent = fmtTime(state.timeHours);
   }
 
-  // Update sun
-  sunSim.update(state.latitude, state.longitude, state.date, state.timeHours, state.shadowsEnabled);
+  // Update sun (with weather condition)
+  sunSim.update(state.latitude, state.longitude, state.date, state.timeHours, state.shadowsEnabled, state.weatherCondition);
+
+  // Weather fog density
+  const fogDensityMap = { clear: 0.002, partly_cloudy: 0.003, cloudy: 0.005, rainy: 0.008, snowy: 0.010 };
+  if (scene.fog) scene.fog.density = fogDensityMap[state.weatherCondition] || 0.002;
+
+  // Weather particle effects
+  weatherEffects.update(dtMs);
 
   const { sunPosition, sunVector, irradiance } = sunSim;
   const { totalWatts, panelData } = EnergyCalc.calculateSystemPower(
-    solarPanels.panels, sunVector, irradiance, sunPosition.elevation
+    solarPanels.panels, sunVector, irradiance, sunPosition.elevation, state.weatherMultiplier
   );
 
   statsThrottle   += dtMs;
@@ -837,31 +1020,63 @@ async function init() {
   // Show startup screen
   startupScreen.show();
   startupScreen.onModeSelected((mode, projectFormData) => {
-    state.appMode = mode;
-    if (mode === 'project' && projectFormData) {
-      state.projectData = new ProjectData(projectFormData);
-    }
+    applyMode(mode, projectFormData);
+  });
+}
 
-    // Initialize UI controller now that we know the mode
+function applyMode(mode, projectFormData) {
+  state.appMode = mode;
+  if (mode === 'project' && projectFormData) {
+    state.projectData = new ProjectData(projectFormData);
+    // Pre-configure scene from project form data
+    state.roofType   = projectFormData.roofType   || state.roofType;
+    state.houseWidth = projectFormData.houseWidth  || state.houseWidth;
+    state.houseDepth = projectFormData.houseDepth  || state.houseDepth;
+    state.wallHeight = projectFormData.wallHeight  || state.wallHeight;
+    state.roofPitch  = projectFormData.roofPitch   || state.roofPitch;
+  }
+
+  // Create UIController only once; reuse on subsequent launches
+  if (!ui) {
     ui = new UIController(app);
     ui.init();
+  }
 
-    // Build initial scene
-    setPanelDimensions(state.panelWidth, state.panelHeight);
-    rebuildRoof();
-    ui.updateEquatorLayoutLabel(state.latitude);
-    sunSim.updateTrajectory(state.latitude, state.longitude, state.date, state.showSunPath);
+  // Build initial scene
+  setPanelDimensions(state.panelWidth, state.panelHeight);
+  rebuildRoof();
+  ui.updateEquatorLayoutLabel(state.latitude);
+  sunSim.updateTrajectory(state.latitude, state.longitude, state.date, state.showSunPath);
 
-    // Show/hide financial panel based on mode
-    const finPanel = document.getElementById('financialSection');
-    if (finPanel) finPanel.style.display = mode === 'project' ? '' : 'none';
+  // Sync UI sliders/buttons to match state (important for project mode)
+  syncUIToState();
 
-    // Hide loading overlay
-    setTimeout(() => {
-      const overlay = document.getElementById('loadingOverlay');
-      if (overlay) overlay.classList.add('hidden');
-    }, 800);
-  });
+  // Show/hide financial panel, fill order, and project name based on mode
+  const finPanel = document.getElementById('financialSection');
+  if (finPanel) finPanel.style.display = mode === 'project' ? '' : 'none';
+
+  // Hide fill order and panel count in sandbox — only meaningful in project mode
+  const fillToggle = document.getElementById('fillOrderToggle');
+  if (fillToggle) fillToggle.style.display = mode === 'project' ? '' : 'none';
+  const panelCountEl = document.getElementById('panelCountDisplay');
+  if (panelCountEl) panelCountEl.style.display = mode === 'project' ? '' : 'none';
+
+  const projHeader = document.getElementById('projectNameHeader');
+  const projNameText = document.getElementById('projectNameText');
+  if (projHeader) {
+    if (mode === 'project' && state.projectData) {
+      if (projNameText) projNameText.textContent = state.projectData.name;
+      projHeader.style.display = '';
+    } else {
+      projHeader.style.display = 'none';
+    }
+  }
+
+  // Hide loading overlay
+  setTimeout(() => {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.classList.add('hidden');
+  }, 800);
 }
 
 init();

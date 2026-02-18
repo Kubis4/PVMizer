@@ -73,7 +73,7 @@ const translations = {
     'obs.chimney':          '\uD83E\uDDF1 Chimney',
     'obs.skylight':         '\uD83E\uDE9F Skylight',
     'obs.hvac':             '\u2744 HVAC',
-    'obs.tree':             '\uD83C\uDF33 Tree',
+    'obs.tree':             '\uD83C\uDF32 Pine',
     'obs.pole':             '\u26A1 Pole',
     'obs.clear':            '\uD83D\uDDD1 Clear',
     'label.size':           'Size',
@@ -109,6 +109,9 @@ const translations = {
     // Restore buttons
     'btn.showControls':     'Show controls',
     'btn.showEnergy':       'Show energy output',
+
+    // PDF export
+    'btn.exportPdf':        'Export PDF Report',
   },
 
   sk: {
@@ -180,7 +183,7 @@ const translations = {
     'obs.chimney':          '\uD83E\uDDF1 Kom\u00edn',
     'obs.skylight':         '\uD83E\uDE9F Strešné okno',
     'obs.hvac':             '\u2744 Klimatiz\u00e1cia',
-    'obs.tree':             '\uD83C\uDF33 Strom',
+    'obs.tree':             '\uD83C\uDF32 Ihli\u010dan',
     'obs.pole':             '\u26A1 St\u013ap',
     'obs.clear':            '\uD83D\uDDD1 Vymaza\u0165',
     'label.size':           'Ve\u013ekos\u0165',
@@ -216,6 +219,9 @@ const translations = {
     // Restore buttons
     'btn.showControls':     'Zobrazi\u0165 ovl\u00e1danie',
     'btn.showEnergy':       'Zobrazi\u0165 energiu',
+
+    // PDF export
+    'btn.exportPdf':        'Exportova\u0165 PDF report',
   }
 };
 

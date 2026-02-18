@@ -132,7 +132,6 @@ export class UIController {
     this._set('totalArea',       `${fmt(totalAreaM2, 1)} m\u00b2`);
     this._set('dailyEnergy',     `${fmt(dailyKwh, 1)} kWh`);
     this._set('annualEnergy',    `${fmt(annualKwh / 1000, 2)} MWh`);
-    this._set('co2Saved',        `${fmt((annualKwh * 0.275) / 1000, 2)} t/yr`);
 
     const bar = document.getElementById('powerBar');
     if (bar) bar.style.width = `${Math.min(100, pct)}%`;
@@ -274,7 +273,6 @@ export class UIController {
     const cost     = projectData.getSystemCost(peakPowerKw);
     const payback  = projectData.getPaybackPeriod(peakPowerKw, annualKwh);
     const lifetime = projectData.getLifetimeSavings(peakPowerKw, annualKwh);
-    const co2      = projectData.getCO2Reduction(annualKwh);
     const selfRate = projectData.getSelfConsumptionRate(annualKwh);
 
     this._set('projAnnualProd',  `${fmt(annualKwh / 1000, 1)} MWh`);
@@ -283,7 +281,6 @@ export class UIController {
     this._set('projSystemCost',  `\u20ac ${fmt(cost, 0)}`);
     this._set('projPayback',     isFinite(payback) ? `${fmt(payback, 1)} yr` : '\u221e');
     this._set('projLifetime',    `\u20ac ${fmt(lifetime, 0)}`);
-    this._set('projCO2',         `${fmt(co2, 1)} t`);
     this._set('projSelfConsume', `${fmt(selfRate, 0)}%`);
     this._set('projNameDisplay', projectData.name);
   }
@@ -452,6 +449,56 @@ export class UIController {
       });
     });
 
+    // Fill strategy buttons (global default) — exclude per-face buttons
+    document.querySelectorAll('.fill-btn:not(.face-fill-btn):not(.face-orient-btn)').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.fill-btn:not(.face-fill-btn):not(.face-orient-btn)').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.app.state.fillStrategy = btn.dataset.fill;
+        this.app.rebuildPanels();
+      });
+    });
+
+    // Per-face orientation buttons
+    document.querySelectorAll('.face-orient-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = this.app.state.selectedFace;
+        if (idx === null || idx === undefined) return;
+        if (!this.app.state.faceConfig[idx]) this.app.state.faceConfig[idx] = {};
+        this.app.state.faceConfig[idx].panelOrientation = btn.dataset.orient;
+        document.querySelectorAll('.face-orient-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.app.rebuildPanels();
+      });
+    });
+
+    // Per-face fill strategy buttons
+    document.querySelectorAll('.face-fill-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = this.app.state.selectedFace;
+        if (idx === null || idx === undefined) return;
+        if (!this.app.state.faceConfig[idx]) this.app.state.faceConfig[idx] = {};
+        this.app.state.faceConfig[idx].fillStrategy = btn.dataset.fill;
+        document.querySelectorAll('.face-fill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.app.rebuildPanels();
+      });
+    });
+
+    // Per-face reset button
+    document.getElementById('faceConfigReset')?.addEventListener('click', () => {
+      const idx = this.app.state.selectedFace;
+      if (idx === null || idx === undefined) return;
+      delete this.app.state.faceConfig[idx];
+      this.app.rebuildPanels();
+      this.showFaceConfig(idx, this.app.state.faceConfig, null, this.app.state);
+    });
+
+    // Weather selector
+    document.getElementById('weatherSelect')?.addEventListener('change', e => {
+      this.app.setWeather(e.target.value);
+    });
+
     // Obstacle toolbar
     document.querySelectorAll('.obstacle-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -496,7 +543,40 @@ export class UIController {
 
     // Home / back-to-project button
     document.getElementById('homeBtn')?.addEventListener('click', () => {
+      if (this.app.resetToDefaults) this.app.resetToDefaults();
       if (this.app.startupScreen) this.app.startupScreen.show();
+    });
+
+    // PDF export button (icon next to project name header)
+    document.getElementById('exportPdfBtn')?.addEventListener('click', async () => {
+      const { exportProjectPDF } = await import('./PdfExport.js');
+      const stats = this.app.getCurrentStats();
+      await exportProjectPDF(
+        this.app.state.projectData,
+        stats,
+        this.app.renderer.domElement,
+        this.app.getChartsForExport(),
+        { renderer: this.app.renderer, composer: this.app.composer, camera: this.app.camera }
+      );
+    });
+
+    // Clickable project name → edit project data
+    document.getElementById('projectNameText')?.addEventListener('click', () => {
+      if (!this.app.state.projectData || !this.app.startupScreen) return;
+      const pd = this.app.state.projectData;
+      this.app.startupScreen.showEditForm({
+        name:              pd.name,
+        roofType:          pd.roofType,
+        houseWidth:        pd.houseWidth,
+        houseDepth:        pd.houseDepth,
+        wallHeight:        pd.wallHeight,
+        roofPitch:         pd.roofPitch,
+        annualConsumption: pd.annualConsumption,
+        tariff:            pd.tariff,
+        feedInTariff:      pd.feedInTariff,
+        lifetime:          pd.lifetime,
+        costPerKwp:        pd.costPerKwp,
+      });
     });
 
     // Settings button + modal
@@ -615,6 +695,34 @@ export class UIController {
         this.app.onLocationChange();
       });
     }
+  }
+
+  showFaceConfig(faceIdx, faceConfig, roofFaces, appState) {
+    const panel = document.getElementById('faceConfigPanel');
+    if (!panel) return;
+    if (faceIdx === null || faceIdx === undefined) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = '';
+    // Show face name if roofFaces available
+    const nameEl = document.getElementById('faceConfigName');
+    if (nameEl && roofFaces && roofFaces[faceIdx]) {
+      const orient = roofFaces[faceIdx].orientation;
+      nameEl.textContent = `${faceIdx + 1} (${orient.charAt(0).toUpperCase() + orient.slice(1)})`;
+    } else if (nameEl) {
+      nameEl.textContent = `${faceIdx + 1}`;
+    }
+    // Highlight active buttons based on per-face config or global defaults
+    const conf = faceConfig[faceIdx] || {};
+    const activeOrient = conf.panelOrientation || (appState ? appState.panelOrientation : 'portrait');
+    const activeFill   = conf.fillStrategy     || (appState ? appState.fillStrategy : 'bottom-up');
+    document.querySelectorAll('.face-orient-btn').forEach(b => {
+      b.classList.toggle('active', activeOrient === b.dataset.orient);
+    });
+    document.querySelectorAll('.face-fill-btn').forEach(b => {
+      b.classList.toggle('active', activeFill === b.dataset.fill);
+    });
   }
 
   /** Update the "South / North" single-tilt layout button label based on hemisphere. */

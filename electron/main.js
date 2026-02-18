@@ -1,7 +1,8 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, shell, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, globalShortcut, ipcMain } = require('electron');
 const path = require('path');
+const fs   = require('fs');
 
 // ─── Single Instance Lock ─────────────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();
@@ -27,7 +28,7 @@ function createWindow() {
       nodeIntegration:  false,
       contextIsolation: true,
       webSecurity:      true,
-      // No preload needed — renderer is pure web content
+      preload:          path.join(__dirname, 'preload.js'),
     }
   });
 
@@ -143,6 +144,22 @@ function buildMenu() {
 app.whenReady().then(() => {
   buildMenu();
   createWindow();
+
+  // IPC: Save PDF file via native Save As dialog
+  ipcMain.handle('save-pdf', async (event, { buffer, defaultName }) => {
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save PDF Report',
+      defaultPath: defaultName || 'solar-project.pdf',
+      filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+    });
+    if (!filePath) return { success: false };
+    try {
+      fs.writeFileSync(filePath, Buffer.from(buffer));
+      return { success: true, filePath };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
 
   // If a second instance tried to open, focus the existing window
   app.on('second-instance', () => {

@@ -102,6 +102,33 @@ function getPanelMaterial() {
 
 const frameMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5, metalness: 0.8 });
 
+/**
+ * Returns an iteration order for (row, col) pairs based on fill strategy.
+ */
+function getIterationOrder(strategy, rows, cols) {
+  const cells = [];
+  if (strategy === 'top-down') {
+    for (let r = rows - 1; r >= 0; r--)
+      for (let c = 0; c < cols; c++)
+        cells.push([r, c]);
+  } else if (strategy === 'center-out') {
+    const cr = (rows - 1) / 2;
+    const cc = (cols - 1) / 2;
+    const all = [];
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++)
+        all.push({ r, c, d: (r - cr) ** 2 + (c - cc) ** 2 });
+    all.sort((a, b) => a.d - b.d);
+    for (const { r, c } of all) cells.push([r, c]);
+  } else {
+    // bottom-up (default)
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++)
+        cells.push([r, c]);
+  }
+  return cells;
+}
+
 export class SolarPanels {
   constructor(scene) {
     this.scene  = scene;
@@ -140,16 +167,28 @@ export class SolarPanels {
       flatTiltDeg   = 0,
       equatorDir    = null,
       flatLayout    = 'south',
+      maxPanels     = Infinity,
+      perFaceConfig = [],
+      fillStrategy  = 'bottom-up',
     } = config;
 
     for (let i = 0; i < faces.length; i++) {
+      if (this.panels.length >= maxPanels) break;
       const gd = gridData[i] || {};
+      const fc = perFaceConfig[i] || {};
+      const orient = fc.panelOrientation || 'portrait';
+      const strategy = fc.fillStrategy || fillStrategy;
+      const isLandscape = orient === 'landscape';
+      const isMixed = orient === 'alt-rows';
+      const pw = isLandscape ? panelH : panelW;
+      const ph = isLandscape ? panelW : panelH;
       this._placePanelsOnFace(
-        faces[i], efficiency, gapSize, panelW, panelH,
+        faces[i], efficiency, gapSize, pw, ph,
         placementMode,
         gd.enabledCells  || null,
         gd.blockedCells  || new Set(),
-        flatTiltDeg, equatorDir, flatLayout
+        flatTiltDeg, equatorDir, flatLayout,
+        maxPanels, strategy, isMixed ? orient : null, panelW, panelH
       );
     }
     return this.panels;
@@ -157,7 +196,9 @@ export class SolarPanels {
 
   _placePanelsOnFace(face, efficiency, gapSize, panelW, panelH,
                      placementMode, enabledCells, blockedCells,
-                     flatTiltDeg = 0, equatorDir = null, flatLayout = 'south') {
+                     flatTiltDeg = 0, equatorDir = null, flatLayout = 'south',
+                     maxPanels = Infinity, fillStrategy = 'bottom-up',
+                     mixedLayout = null, basePanelW = panelW, basePanelH = panelH) {
     const { center, normal, rightDir, upDir, width, height, orientation, energyNormal, verts2d } = face;
 
     // Tilt is only meaningful on truly flat faces — use a strict threshold
@@ -209,6 +250,7 @@ export class SolarPanels {
       const west = mkQuat(-tiltRad);
 
       const addMesh = (pr, pu, q, pnormal) => {
+        if (this.panels.length >= maxPanels) return;
         if (verts2d && !insideConvex2D(pr, pu, verts2d, polyMargin)) return;
         const pos = center.clone()
           .addScaledVector(rightDir, pr)
@@ -226,38 +268,20 @@ export class SolarPanels {
         this.panels.push(mesh);
       };
 
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const cellIdx = r * cols + c;
-          if (blockedCells.has(cellIdx)) continue;
-          if (placementMode === 'manual' && enabledCells !== null && !enabledCells.has(cellIdx)) continue;
-          const pu = startU + r * pairStepU;
-          const ridgeR = startR + c * pairStepR;
-          addMesh(ridgeR + panelH / 2 * cosT, pu, east.quat, east.n);  // east panel
-          addMesh(ridgeR - panelH / 2 * cosT, pu, west.quat, west.n);  // west panel
-        }
+      const ewOrder = getIterationOrder(fillStrategy, rows, cols);
+      for (const [r, c] of ewOrder) {
+        const cellIdx = r * cols + c;
+        if (blockedCells.has(cellIdx)) continue;
+        if (placementMode === 'manual' && enabledCells !== null && !enabledCells.has(cellIdx)) continue;
+        const pu = startU + r * pairStepU;
+        const ridgeR = startR + c * pairStepR;
+        addMesh(ridgeR + panelH / 2 * cosT, pu, east.quat, east.n);  // east panel
+        addMesh(ridgeR - panelH / 2 * cosT, pu, west.quat, west.n);  // west panel
       }
       return;
     }
 
-    // ── South / single-tilt layout (default) ────────────────────────────────
-    // Row pitch is always constant — tilt only changes the physical angle of panels,
-    // not the grid layout. This keeps the panel count stable across all tilt angles.
-    const stepW = panelW + gapSize;
-    const stepH = panelH + gapSize;
-
-    // Stable row/col counts derived from the face dimensions and the margin constraint.
-    // Formula ensures the last row's panel center fits within the polygon boundary.
-    const cols   = Math.max(1, Math.floor(width  / stepW));
-    const rows   = Math.max(1, Math.floor(height / stepH));
-    const totalW = cols * stepW - gapSize;
-    const startR = -totalW / 2 + panelW / 2;
-
-    // Center the grid vertically on the face
-    const totalH = rows * stepH - gapSize;
-    let startU   = -totalH / 2 + panelH / 2;
-
-    // Panel rotation
+    // Panel rotation (shared by all south/single-tilt layouts)
     let quat, panelNormal;
     if (tiltRad > 0 && equatorDir) {
       const tiltSign = equatorDir.dot(upDir) < 0 ? 1 : -1;
@@ -273,11 +297,76 @@ export class SolarPanels {
         new THREE.Matrix4().makeBasis(rightDir, normal, localZ));
     }
 
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const cellIdx = r * cols + c;
-        const pr = startR + c * stepW;
-        const pu = startU + r * stepH;
+    // ── Max Fill layout: try every portrait/landscape split, pick best ────
+    // Tries all combinations of N portrait rows + M landscape rows that fit
+    // within the available height, and picks whichever yields the most panels.
+    if (mixedLayout === 'alt-rows') {
+      const pW = basePanelW, pH = basePanelH;  // portrait dims
+      const lW = basePanelH, lH = basePanelW;  // landscape dims (swapped)
+
+      const pStepW = pW + gapSize;
+      const pStepH = pH + gapSize;
+      const lStepW = lW + gapSize;
+      const lStepH = lH + gapSize;
+      const pCols  = Math.max(1, Math.floor(width / pStepW));
+      const lCols  = Math.max(1, Math.floor(width / lStepW));
+
+      const maxPortraitRows  = Math.floor(height / pStepH);
+      const maxLandscapeRows = Math.floor(height / lStepH);
+
+      // Evaluate every split: 0..maxPortraitRows portrait + fill rest with landscape
+      let bestCount = 0;
+      let bestNp = 0, bestNl = 0;
+      for (let np = 0; np <= maxPortraitRows; np++) {
+        const usedH = np * pStepH;
+        const nl = Math.floor((height - usedH) / lStepH);
+        const count = np * pCols + nl * lCols;
+        if (count > bestCount) { bestCount = count; bestNp = np; bestNl = nl; }
+      }
+      // Also try all-landscape
+      {
+        const count = maxLandscapeRows * lCols;
+        if (count > bestCount) { bestCount = count; bestNp = 0; bestNl = maxLandscapeRows; }
+      }
+
+      // Build row definitions — landscape rows at bottom, portrait rows on top
+      const rowDefs = [];
+      for (let r = 0; r < bestNl; r++) {
+        rowDefs.push({ w: lW, h: lH, stepW: lStepW, cols: lCols, isLand: true });
+      }
+      for (let r = 0; r < bestNp; r++) {
+        rowDefs.push({ w: pW, h: pH, stepW: pStepW, cols: pCols, isLand: false });
+      }
+
+      // Total height and row centers
+      let totalH = 0;
+      for (let r = 0; r < rowDefs.length; r++) {
+        totalH += rowDefs[r].h;
+        if (r < rowDefs.length - 1) totalH += gapSize;
+      }
+
+      const rowCenters = [];
+      let curU = -totalH / 2;
+      for (const rd of rowDefs) {
+        curU += rd.h / 2;
+        rowCenters.push(curU);
+        curU += rd.h / 2 + gapSize;
+      }
+
+      // Place panels using fill strategy on portrait rows, then landscape
+      const maxCols = Math.max(pCols, lCols);
+      const order = getIterationOrder(fillStrategy, rowDefs.length, maxCols);
+      for (const [r, c] of order) {
+        if (this.panels.length >= maxPanels) return;
+        if (r >= rowDefs.length) continue;
+        const rd = rowDefs[r];
+        if (c >= rd.cols) continue;
+
+        const cellIdx = r * maxCols + c;
+        const totalW  = rd.cols * rd.stepW - gapSize;
+        const startR  = -totalW / 2 + rd.w / 2;
+        const pr = startR + c * rd.stepW;
+        const pu = rowCenters[r];
 
         if (verts2d && !insideConvex2D(pr, pu, verts2d, polyMargin)) continue;
         if (blockedCells.has(cellIdx)) continue;
@@ -288,18 +377,59 @@ export class SolarPanels {
           .addScaledVector(upDir,    pu)
           .addScaledVector(normal,   normalOffset);
 
-        const geom      = new THREE.BoxGeometry(panelW, PANEL_THICKNESS, panelH);
+        const geom      = new THREE.BoxGeometry(rd.w, PANEL_THICKNESS, rd.h);
         const materials = [frameMat, frameMat, mat, frameMat, frameMat, frameMat];
         const mesh      = new THREE.Mesh(geom, materials);
         mesh.position.copy(pos);
         mesh.quaternion.copy(quat);
         mesh.castShadow = mesh.receiveShadow = true;
         mesh.name       = `panel_${orientation}_r${r}_c${c}`;
-        mesh.userData   = { normal: panelNormal.clone(), efficiency, area, shadingFactor: 0, faceOrientation: orientation };
-
+        mesh.userData   = { normal: panelNormal.clone(), efficiency, area: rd.w * rd.h, shadingFactor: 0, faceOrientation: orientation };
         this.group.add(mesh);
         this.panels.push(mesh);
       }
+      return;
+    }
+
+    // ── Standard uniform grid (portrait / landscape) ──────────────────────
+    const stepW = panelW + gapSize;
+    const stepH = panelH + gapSize;
+
+    const cols   = Math.max(1, Math.floor(width  / stepW));
+    const rows   = Math.max(1, Math.floor(height / stepH));
+    const totalW = cols * stepW - gapSize;
+    const startR = -totalW / 2 + panelW / 2;
+
+    const totalH = rows * stepH - gapSize;
+    let startU   = -totalH / 2 + panelH / 2;
+
+    const southOrder = getIterationOrder(fillStrategy, rows, cols);
+    for (const [r, c] of southOrder) {
+      if (this.panels.length >= maxPanels) return;
+      const cellIdx = r * cols + c;
+      const pr = startR + c * stepW;
+      const pu = startU + r * stepH;
+
+      if (verts2d && !insideConvex2D(pr, pu, verts2d, polyMargin)) continue;
+      if (blockedCells.has(cellIdx)) continue;
+      if (placementMode === 'manual' && enabledCells !== null && !enabledCells.has(cellIdx)) continue;
+
+      const pos = center.clone()
+        .addScaledVector(rightDir, pr)
+        .addScaledVector(upDir,    pu)
+        .addScaledVector(normal,   normalOffset);
+
+      const geom      = new THREE.BoxGeometry(panelW, PANEL_THICKNESS, panelH);
+      const materials = [frameMat, frameMat, mat, frameMat, frameMat, frameMat];
+      const mesh      = new THREE.Mesh(geom, materials);
+      mesh.position.copy(pos);
+      mesh.quaternion.copy(quat);
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.name       = `panel_${orientation}_r${r}_c${c}`;
+      mesh.userData   = { normal: panelNormal.clone(), efficiency, area, shadingFactor: 0, faceOrientation: orientation };
+
+      this.group.add(mesh);
+      this.panels.push(mesh);
     }
   }
 
