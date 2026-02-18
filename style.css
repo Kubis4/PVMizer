@@ -178,7 +178,11 @@ html, body {
   color: var(--accent);
 }
 
-.roof-icon { font-size: 18px; }
+.roof-icon { 
+  width: 45px;
+  height: 45px;
+  object-fit: contain;
+}
 
 /* ===== CONTROLS ===== */
 .control-row {
@@ -745,8 +749,11 @@ canvas#powerChart, canvas#monthlyChart {
 }
 
 .mode-card-icon {
-  font-size: 40px;
-  line-height: 1;
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
 }
 
 .mode-card h2 {
@@ -762,6 +769,15 @@ canvas#powerChart, canvas#monthlyChart {
   text-align: center;
 }
 
+.sandbox-card {
+  border-color: rgba(245,158,11,0.25);
+}
+
+.sandbox-card:hover {
+  border-color: rgba(245,158,11,0.6);
+  box-shadow: 0 12px 40px rgba(245,158,11,0.15);
+}
+
 .project-card {
   border-color: rgba(59,130,246,0.25);
 }
@@ -769,6 +785,22 @@ canvas#powerChart, canvas#monthlyChart {
 .project-card:hover {
   border-color: rgba(59,130,246,0.6);
   box-shadow: 0 12px 40px rgba(59,130,246,0.15);
+}
+
+.startup-footer {
+  position: fixed;
+  bottom: 15px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.startup-footer p {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  margin: 0;
+  line-height: 1.4;
 }
 
 .mode-btn {

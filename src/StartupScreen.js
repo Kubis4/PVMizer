@@ -26,18 +26,23 @@ export class StartupScreen {
 
         <!-- Mode selection cards -->
         <div class="startup-modes" id="startupModes">
-          <div class="mode-card" id="sandboxCard">
-            <div class="mode-card-icon">&#x1F3D6;</div>
+          <div class="mode-card sandbox-card" id="sandboxCard">
+            <img class="mode-card-icon" src="assets/sandbox_icon.png" alt="Sandbox mode" />
             <h2>Sandbox</h2>
             <p>Experiment freely with roof layouts, panel placement, obstacles and visual settings. No restrictions.</p>
             <button class="mode-btn sandbox-btn" id="sandboxLaunchBtn">Launch Sandbox</button>
           </div>
           <div class="mode-card project-card" id="projectCard">
-            <div class="mode-card-icon">&#x1F4CB;</div>
+            <img class="mode-card-icon" src="assets/project_icon.png" alt="Project mode" />
             <h2>Project Mode</h2>
             <p>Plan a real installation. Enter building details for ROI calculations, payback period and full financial analysis.</p>
             <button class="mode-btn project-btn" id="projectSetupBtn">Set Up Project &rarr;</button>
           </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="startup-footer">
+          <p>Created as diploma thesis by:<br>Bc. Vladimir Kubica</p>
         </div>
 
         <!-- Project form (hidden until project card clicked) -->
@@ -128,11 +133,13 @@ export class StartupScreen {
     document.getElementById('projectSetupBtn').addEventListener('click', () => {
       document.getElementById('startupModes').style.display = 'none';
       document.getElementById('startupForm').style.display  = '';
+      document.querySelector('.startup-footer').style.display = 'none';
     });
 
     document.getElementById('formBackBtn').addEventListener('click', () => {
       document.getElementById('startupForm').style.display  = 'none';
       document.getElementById('startupModes').style.display = '';
+      document.querySelector('.startup-footer').style.display = '';
     });
 
     // Roof type controls pitch availability

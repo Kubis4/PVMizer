@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roof Icons Preview</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .icon-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        svg {
+            width: 200px;
+            height: 200px;
+            border: 1px solid #ddd;
+            background: #fafafa;
+        }
+        h2 {
+            margin: 15px 0 10px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Roof Type Icons Preview</h1>
+    <div class="container">
+        <div class="icon-box">
+            <h2>Flat Roof</h2>
+            <iframe src="roof-flat.svg" style="width: 200px; height: 200px; border: 1px solid #ddd;"></iframe>
+        </div>
+        <div class="icon-box">
+            <h2>Gable Roof</h2>
+            <iframe src="roof-gable.svg" style="width: 200px; height: 200px; border: 1px solid #ddd;"></iframe>
+        </div>
+        <div class="icon-box">
+            <h2>Hip Roof</h2>
+            <iframe src="roof-hip.svg" style="width: 200px; height: 200px; border: 1px solid #ddd;"></iframe>
+        </div>
+        <div class="icon-box">
+            <h2>Pyramid Roof</h2>
+            <iframe src="roof-pyramid.svg" style="width: 200px; height: 200px; border: 1px solid #ddd;"></iframe>
+        </div>
+    </div>
+</body>
+</html>
