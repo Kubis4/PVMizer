@@ -22,7 +22,7 @@ function createWindow() {
     minHeight:       600,
     backgroundColor: '#0a0e1a',
     show:            false,       // show after ready-to-show to avoid white flash
-    title:           'Solar Panel Simulation',
+    title:           'PVMizer 2.0',
     autoHideMenuBar: true,        // hide menu bar (show with Alt)
     webPreferences: {
       nodeIntegration:  false,

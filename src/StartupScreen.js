@@ -5,6 +5,7 @@
  */
 
 import { PanelRecommender } from './PanelRecommender.js';
+import { t } from './i18n.js';
 
 export class StartupScreen {
   constructor() {
@@ -20,82 +21,82 @@ export class StartupScreen {
       <div class="startup-inner">
         <div class="startup-header">
           <div class="startup-sun-icon">&#x2600;</div>
-          <h1>Solar Panel Simulation</h1>
-          <p>Plan your solar installation with precision</p>
+          <h1 data-i18n="startup.appTitle">PVMizer 2.0</h1>
+          <p data-i18n="startup.subtitle">Plan your solar installation with precision</p>
         </div>
 
         <!-- Mode selection cards -->
         <div class="startup-modes" id="startupModes">
           <div class="mode-card sandbox-card" id="sandboxCard">
             <img class="mode-card-icon" src="assets/sandbox_icon.png" alt="Sandbox mode" />
-            <h2>Sandbox</h2>
-            <p>Experiment freely with roof layouts, panel placement, obstacles and visual settings. No restrictions.</p>
-            <button class="mode-btn sandbox-btn" id="sandboxLaunchBtn">Launch Sandbox</button>
+            <h2 data-i18n="startup.sandbox">Sandbox</h2>
+            <p data-i18n="startup.sandboxDesc">Experiment freely with roof layouts, panel placement, obstacles and visual settings. No restrictions.</p>
+            <button class="mode-btn sandbox-btn" id="sandboxLaunchBtn" data-i18n="startup.sandboxBtn">Launch Sandbox</button>
           </div>
           <div class="mode-card project-card" id="projectCard">
             <img class="mode-card-icon" src="assets/project_icon.png" alt="Project mode" />
-            <h2>Project Mode</h2>
-            <p>Plan a real installation. Enter building details for ROI calculations, payback period and full financial analysis.</p>
-            <button class="mode-btn project-btn" id="projectSetupBtn">Set Up Project &rarr;</button>
+            <h2 data-i18n="startup.project">Project Mode</h2>
+            <p data-i18n="startup.projectDesc">Plan a real installation. Enter building details for ROI calculations, payback period and full financial analysis.</p>
+            <button class="mode-btn project-btn" id="projectSetupBtn" data-i18n="startup.projectBtn">Set Up Project →</button>
           </div>
         </div>
 
         <!-- Footer -->
         <div class="startup-footer">
-          <p>Created as diploma thesis by:<br>Bc. Vladimir Kubica</p>
+          <p data-i18n="startup.credit">Created as diploma thesis by:<br>Bc. Vladimir Kubica</p>
         </div>
 
         <!-- Project form (hidden until project card clicked) -->
         <div class="startup-form" id="startupForm" style="display:none">
-          <h2>Project Details</h2>
+          <h2 data-i18n="startup.projectForm">Project Details</h2>
           <div class="form-grid">
             <div class="form-group form-full">
-              <label for="projName">Project Name</label>
+              <label for="projName" data-i18n="startup.projName">Project Name</label>
               <input type="text" id="projName" placeholder="My Solar Project" value="My Solar Project">
             </div>
             <div class="form-group">
-              <label for="projRoofType">Roof Type</label>
+              <label for="projRoofType" data-i18n="startup.roofType">Roof Type</label>
               <select id="projRoofType">
-                <option value="flat">Flat</option>
-                <option value="gable">Gable</option>
-                <option value="hip">Hip</option>
-                <option value="pyramid">Pyramid</option>
+                <option value="flat" data-i18n="roof.flat">Flat</option>
+                <option value="gable" data-i18n="roof.gable">Gable</option>
+                <option value="hip" data-i18n="roof.hip">Hip</option>
+                <option value="pyramid" data-i18n="roof.pyramid">Pyramid</option>
               </select>
             </div>
             <div class="form-group">
-              <label for="projPitch">Pitch Angle (&deg;)</label>
+              <label for="projPitch" data-i18n="startup.pitchAngle">Pitch Angle (°)</label>
               <input type="number" id="projPitch" value="30" min="5" max="60" step="1" disabled>
             </div>
             <div class="form-group">
-              <label for="projWidth">Building Width (m)</label>
+              <label for="projWidth" data-i18n="startup.width">Building Width (m)</label>
               <input type="number" id="projWidth" value="10" min="5" max="30" step="0.5">
             </div>
             <div class="form-group">
-              <label for="projDepth">Building Depth (m)</label>
+              <label for="projDepth" data-i18n="startup.depth">Building Depth (m)</label>
               <input type="number" id="projDepth" value="10" min="5" max="30" step="0.5">
             </div>
             <div class="form-group">
-              <label for="projWallHeight">Wall Height (m)</label>
+              <label for="projWallHeight" data-i18n="startup.wallHeight">Wall Height (m)</label>
               <input type="number" id="projWallHeight" value="3" min="2" max="8" step="0.25">
             </div>
             <div class="form-group">
-              <label for="projConsumption">Annual Consumption (kWh/yr)</label>
+              <label for="projConsumption" data-i18n="startup.consumption">Annual Consumption (kWh/yr)</label>
               <input type="number" id="projConsumption" value="5000" min="100" max="500000" step="100">
             </div>
             <div class="form-group">
-              <label for="projTariff">Electricity Tariff (&#x20AC;/kWh)</label>
+              <label for="projTariff" data-i18n="startup.tariff">Electricity Tariff (€/kWh)</label>
               <input type="number" id="projTariff" value="0.30" min="0.01" max="2.0" step="0.01">
             </div>
             <div class="form-group">
-              <label for="projFeedIn">Feed-in Tariff (&#x20AC;/kWh)</label>
+              <label for="projFeedIn" data-i18n="startup.feedIn">Feed-in Tariff (€/kWh)</label>
               <input type="number" id="projFeedIn" value="0.08" min="0" max="0.5" step="0.01">
             </div>
             <div class="form-group">
-              <label for="projLifetime">System Lifetime (years)</label>
+              <label for="projLifetime" data-i18n="startup.lifetime">System Lifetime (years)</label>
               <input type="number" id="projLifetime" value="25" min="5" max="40">
             </div>
             <div class="form-group">
-              <label for="projCostPerKwp">Install Cost (&#x20AC;/kWp)</label>
+              <label for="projCostPerKwp" data-i18n="startup.costPerKwp">Install Cost (€/kWp)</label>
               <input type="number" id="projCostPerKwp" value="1200" min="400" max="4000" step="50">
             </div>
           </div>
@@ -115,7 +116,7 @@ export class StartupScreen {
           <div class="form-actions">
             <button class="form-back-btn" id="formBackBtn">&larr; Back</button>
             <button class="form-recommend-btn" id="recommendBtn">&#x1F4CA; Calculate</button>
-            <button class="form-launch-btn" id="projectLaunchBtn">Launch Project &rarr;</button>
+            <button class="form-launch-btn" id="projectLaunchBtn" data-i18n="startup.launchProject">Launch Project →</button>
           </div>
         </div>
       </div>

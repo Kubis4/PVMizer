@@ -5,6 +5,30 @@
 
 const translations = {
   en: {
+    // Startup screen
+    'startup.appTitle':     'PVMizer 2.0',
+    'startup.subtitle':     'Plan your solar installation with precision',
+    'startup.sandbox':      'Sandbox',
+    'startup.sandboxDesc':  'Experiment freely with roof layouts, panel placement, obstacles and visual settings. No restrictions.',
+    'startup.sandboxBtn':   'Launch Sandbox',
+    'startup.project':      'Project Mode',
+    'startup.projectDesc':  'Plan a real installation. Enter building details for ROI calculations, payback period and full financial analysis.',
+    'startup.projectBtn':   'Set Up Project →',
+    'startup.projectForm':  'Project Details',
+    'startup.projName':     'Project Name',
+    'startup.roofType':     'Roof Type',
+    'startup.pitchAngle':   'Pitch Angle (°)',
+    'startup.width':        'Building Width (m)',
+    'startup.depth':        'Building Depth (m)',
+    'startup.wallHeight':   'Wall Height (m)',
+    'startup.consumption':  'Annual Consumption (kWh/yr)',
+    'startup.tariff':       'Electricity Tariff (€/kWh)',
+    'startup.feedIn':       'Feed-in Tariff (€/kWh)',
+    'startup.lifetime':     'System Lifetime (years)',
+    'startup.costPerKwp':   'Install Cost (€/kWp)',
+    'startup.launchProject':'Launch Project →',
+    'startup.credit':       'Created as diploma thesis by:\nBc. Vladimir Kubica',
+
     // Left panel
     'panel.title':          'Solar Simulation',
     'section.roofType':     'Roof Type',
@@ -115,8 +139,32 @@ const translations = {
   },
 
   sk: {
+    // Startup screen
+    'startup.appTitle':     'PVMizer 2.0',
+    'startup.subtitle':     'Plánujte svoju solárnu inštaláciu s presnosťou',
+    'startup.sandbox':      'Sandbox režim',
+    'startup.sandboxDesc':  'Experimentujte voľne s rozložením strešných prvkov, umiestnením panelov, prekážkami a vizuálnymi nastaveniami. Bez obmedzení.',
+    'startup.sandboxBtn':   'Spustiť Sandbox',
+    'startup.project':      'Projektový režim',
+    'startup.projectDesc':  'Plánujte skutočnú inštaláciu. Zadajte detaily budovy pre výpočty ROI, dobu návratnosti a kompletnú finančnú analýzu.',
+    'startup.projectBtn':   'Nastaviť projekt →',
+    'startup.projectForm':  'Podrobnosti projektu',
+    'startup.projName':     'Názov projektu',
+    'startup.roofType':     'Typ strechy',
+    'startup.pitchAngle':   'Uhol sklonu (°)',
+    'startup.width':        'Šírka budovy (m)',
+    'startup.depth':        'Hĺbka budovy (m)',
+    'startup.wallHeight':   'Výška steny (m)',
+    'startup.consumption':  'Ročná spotreba (kWh/rok)',
+    'startup.tariff':       'Cena elektriny (€/kWh)',
+    'startup.feedIn':       'Spätná zmluvná cena (€/kWh)',
+    'startup.lifetime':     'Životnosť systému (roky)',
+    'startup.costPerKwp':   'Náklady na inštaláciu (€/kWp)',
+    'startup.launchProject':'Spustiť projekt →',
+    'startup.credit':       'Vytvorené ako diplomová práca:\nBc. Vladimir Kubica',
+
     // Left panel
-    'panel.title':          'Sol\u00e1rna simul\u00e1cia',
+    'panel.title':          'Solárna simulácia',
     'section.roofType':     'Typ strechy',
     'roof.flat':            'Ploch\u00e1',
     'roof.gable':           '\u0160t\u00edtov\u00e1',

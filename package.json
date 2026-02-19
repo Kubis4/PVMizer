@@ -1,6 +1,6 @@
 {
-  "name": "solar-panel-simulation",
-  "version": "1.0.0",
+  "name": "pvmizer",
+  "version": "2.0.0",
   "description": "3D Solar Panel Roof Simulation with real-time sun tracking and energy calculations",
   "main": "electron/main.js",
   "scripts": {
@@ -20,10 +20,11 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.kubis.solar-simulation",
-    "productName": "Solar Panel Simulation",
+    "appId": "com.kubis.pvmizer",
+    "productName": "PVMizer 2.0",
     "copyright": "Copyright © 2024",
     "asar": false,
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "directories": {
       "output": "dist",
       "buildResources": "assets"
@@ -33,6 +34,7 @@
       "index.html",
       "style.css",
       "electron/**/*",
+      "assets/**/*",
       "!node_modules"
     ],
     "extraFiles": [
@@ -66,6 +68,7 @@
           ]
         }
       ],
+      "icon": "assets/project_icon.png",
       "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
@@ -74,10 +77,13 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Solar Panel Simulation",
-      "installerHeaderIcon": "",
-      "uninstallDisplayName": "Solar Panel Simulation"
+      "shortcutName": "PVMizer 2.0",
+      "installerIcon": "assets/project_icon.png",
+      "uninstallerIcon": "assets/project_icon.png",
+      "installerHeader": "",
+      "uninstallDisplayName": "PVMizer 2.0"
     },
+    "afterPack": "scripts/afterPack.js",
     "portable": {
       "artifactName": "${productName} ${version} Portable.exe"
     }
