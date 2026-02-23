@@ -324,6 +324,20 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   background: rgba(59,130,246,0.1);
 }
 
+/* Project geocoded location button */
+.preset-btn-project {
+  border-color: rgba(16,185,129,0.4);
+  color: var(--success);
+  background: rgba(16,185,129,0.07);
+  max-width: 100%;
+}
+
+.preset-btn-project:hover, .preset-btn-project.active {
+  border-color: var(--success);
+  color: #fff;
+  background: rgba(16,185,129,0.2);
+}
+
 /* ===== STATS PANEL ===== */
 .stat-card {
   background: var(--bg-section);
@@ -591,6 +605,7 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   padding: 6px 14px;
   gap: 1px;
 }
@@ -811,7 +826,7 @@ canvas#powerChart, canvas#monthlyChart {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  margin-top: 4px;
+  margin-top: auto;
 }
 
 .sandbox-btn {
@@ -896,6 +911,70 @@ canvas#powerChart, canvas#monthlyChart {
 .form-group select option {
   background: #0f172a;
   color: var(--text);
+}
+
+/* ===== ADDRESS FIELD (Startup Form) ===== */
+.address-input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.address-input-wrap input {
+  flex: 1;
+}
+
+.locate-btn {
+  background: rgba(59,130,246,0.18);
+  color: #93c5fd;
+  border: 1px solid rgba(59,130,246,0.35);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+}
+
+.locate-btn:hover { background: rgba(59,130,246,0.32); color: #fff; }
+.locate-btn:disabled { opacity: 0.5; cursor: default; }
+
+.locate-status {
+  display: block;
+  font-size: 11px;
+  min-height: 16px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.locate-status.locating { color: var(--accent2); }
+.locate-status.located  { color: var(--success); }
+.locate-status.locate-error { color: var(--danger); }
+
+.roof-preview-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.roof-preview-wrap select {
+  flex: 1;
+}
+
+.roof-preview-img {
+  width: 64px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  padding: 4px;
+  flex-shrink: 0;
 }
 
 .form-actions {
@@ -1130,7 +1209,7 @@ canvas#powerChart, canvas#monthlyChart {
 /* ===== OBSTACLE TOOLBAR ===== */
 .obstacle-toolbar {
   position: fixed;
-  bottom: 52px;
+  bottom: 70px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -1669,6 +1748,25 @@ kbd {
 }
 
 /* ===== RECOMMENDATION BOX (Startup Form) ===== */
+.pvgis-status {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  margin-bottom: 6px;
+}
+.pvgis-loading {
+  color: var(--text-dim);
+  background: rgba(255,255,255,0.04);
+}
+.pvgis-loaded {
+  color: #4ade80;
+  background: rgba(74,222,128,0.08);
+}
+.pvgis-error {
+  color: #fb923c;
+  background: rgba(251,146,60,0.08);
+}
+
 .proj-recommend-box {
   background: rgba(59,130,246,0.08);
   border: 1px solid rgba(59,130,246,0.25);
@@ -1735,7 +1833,6 @@ kbd {
   font-family: inherit;
   font-variant-numeric: tabular-nums;
   line-height: 1.3;
-  margin-top: 1px;
 }
 .ib-weather-select:hover { background: rgba(255,255,255,0.1); }
 .ib-weather-select option { background: #1a1f30; color: var(--text); }

@@ -44,9 +44,17 @@ export class EnergyCalc {
     const dni = SunSimulation.getDNI(elevationDeg);
     const dhi = SunSimulation.getDHI(elevationDeg);
 
-    // Beam component: DNI * cos(angle of incidence), reduced by obstacle shading
-    const cosAOI = Math.max(0, panelNormal.dot(sunVector));
-    const beam   = dni * cosAOI * (1 - shadingFactor);
+    // Beam component: DNI * cos(angle of incidence), reduced by obstacle shading.
+    // Without panel-level optimizers, even partial shading triggers the bypass diode,
+    // shorting out the sub-string and causing disproportionate losses (string effect).
+    // Non-linear model: effectiveLoss = 1 - (1 - sf)^3
+    //   sf=0.15 (chimney) → 39% loss,  sf=0.20 (pole) → 49% loss,
+    //   sf=0.40 (pine)    → 78% loss,  sf=0.45 (tree) → 83% loss
+    const cosAOI            = Math.max(0, panelNormal.dot(sunVector));
+    const effectiveBeamLoss = shadingFactor > 0
+      ? 1 - Math.pow(1 - shadingFactor, 3)
+      : 0;
+    const beam = dni * cosAOI * (1 - effectiveBeamLoss);
 
     // Tilt of panel from horizontal (0=flat, 90=vertical)
     const tilt    = Math.acos(Math.max(-1, Math.min(1, panelNormal.y)));
@@ -147,14 +155,16 @@ export class EnergyCalc {
    * Calculate monthly energy totals (12 values).
    * Uses ASHRAE representative days for each month.
    */
-  static calculateMonthlyEnergy(lat, lon, year, panelInfos, weatherMultiplier = 1.0) {
+  static calculateMonthlyEnergy(lat, lon, year, panelInfos, weatherMultiplier = 1.0, monthlyCorrections = null) {
     const repDayOfMonth = [17, 16, 16, 15, 15, 11, 17, 16, 15, 15, 14, 10];
     const daysInMonth   = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     const monthly = [];
 
     for (let m = 0; m < 12; m++) {
+      const correction       = monthlyCorrections ? (monthlyCorrections[m] ?? 1.0) : 1.0;
+      const effectiveMultiplier = weatherMultiplier * correction;
       const date     = new Date(year, m, repDayOfMonth[m]);
-      const curve    = EnergyCalc.calculateDayCurve(lat, lon, date, panelInfos, weatherMultiplier);
+      const curve    = EnergyCalc.calculateDayCurve(lat, lon, date, panelInfos, effectiveMultiplier);
       const dailyKwh = EnergyCalc.integrateDayCurve(curve);
       monthly.push(dailyKwh * daysInMonth[m]);
     }

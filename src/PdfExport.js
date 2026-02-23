@@ -51,30 +51,21 @@ function captureHighResScreenshot(canvasEl, renderer, composer, camera, scale = 
 }
 
 /**
- * Capture a chart at higher resolution by temporarily scaling it.
+ * Capture a chart at higher resolution using Chart.js devicePixelRatio.
+ * This is the correct approach — resizing the canvas directly fights Chart.js.
  */
-function captureChartHighRes(chart, scale = 2) {
+function captureChartHighRes(chart, scale = 3) {
   if (!chart || !chart.canvas) return null;
   try {
-    const canvas = chart.canvas;
-    const origW = canvas.width;
-    const origH = canvas.height;
-
-    canvas.width  = origW * scale;
-    canvas.height = origH * scale;
-    chart.resize();
+    const origDPR = chart.options.devicePixelRatio;
+    chart.options.devicePixelRatio = (window.devicePixelRatio || 1) * scale;
     chart.update('none');
-
-    const imgData = canvas.toDataURL('image/png');
-
-    canvas.width  = origW;
-    canvas.height = origH;
-    chart.resize();
+    const imgData = chart.toBase64Image('image/png', 1);
+    chart.options.devicePixelRatio = origDPR ?? (window.devicePixelRatio || 1);
     chart.update('none');
-
     return imgData;
   } catch (e) {
-    try { return chart.canvas.toDataURL('image/png'); } catch (_) { return null; }
+    try { return chart.toBase64Image('image/png', 1); } catch (_) { return null; }
   }
 }
 
@@ -87,6 +78,17 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
   const contentW = pw - margin * 2;
   let y = margin;
 
+  // Pre-compute all financial values (used across pages)
+  const annualKwh      = stats.annualKwh;
+  const peakKwp        = stats.peakPowerKw;
+  const selfConsume    = projectData.getSelfConsumptionRate(annualKwh);
+  const systemCost     = projectData.getSystemCost(peakKwp);
+  const annualSavings  = projectData.getAnnualSavings(annualKwh);
+  const payback        = projectData.getPaybackPeriod(peakKwp, annualKwh);
+  const lifetimeSavings = projectData.getLifetimeSavings(peakKwp, annualKwh);
+  const co2            = projectData.getCO2Reduction(annualKwh);
+  const fmtEur = v => `\u20AC ${v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
   const addPageNumber = (pageNum) => {
     doc.setFontSize(8);
     doc.setTextColor(...C.footerText);
@@ -95,7 +97,7 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
     doc.text(new Date().toLocaleDateString(), pw - margin, ph - 8, { align: 'right' });
   };
 
-  // ── PAGE 1: Project Summary ──────────────────────────────────────────────
+  // ── PAGE 1: 3D Screenshot + Key KPIs ─────────────────────────────────────
 
   // Header bar
   doc.setFillColor(...C.headerBg);
@@ -107,7 +109,64 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
   doc.text('Solar Installation Report', pw / 2, 19, { align: 'center' });
   doc.setFontSize(8);
   doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), pw / 2, 25, { align: 'center' });
-  y = 36;
+  y = 33;
+
+  // ── 3D Screenshot ────────────────────────────────────────────────────────
+  try {
+    let imgData;
+    if (renderContext && renderContext.renderer && renderContext.composer && renderContext.camera) {
+      imgData = captureHighResScreenshot(
+        canvasEl, renderContext.renderer, renderContext.composer, renderContext.camera, 2
+      );
+    } else {
+      imgData = canvasEl.toDataURL('image/jpeg', 0.92);
+    }
+
+    // Reserve bottom ~90mm for KPI table — use the rest for the image
+    const maxImgH = ph - y - 95;
+    const naturalH = contentW * (canvasEl.height / canvasEl.width);
+    const finalH = Math.min(naturalH, maxImgH);
+
+    doc.setDrawColor(...C.border);
+    doc.setLineWidth(0.3);
+    doc.rect(margin - 0.5, y - 0.5, contentW + 1, finalH + 1, 'S');
+    doc.addImage(imgData, 'JPEG', margin, y, contentW, finalH);
+    y += finalH + 6;
+  } catch (e) {
+    doc.setFontSize(10);
+    doc.setTextColor(200, 50, 50);
+    doc.text('Could not capture 3D view.', margin, y);
+    y += 10;
+  }
+
+  // ── Key KPI summary table ─────────────────────────────────────────────────
+  y = drawSectionTitle(doc, 'Project Summary', margin, y, contentW);
+
+  const kpiRows = [
+    ['Total Panels',       `${stats.panelCount}`],
+    ['Peak Power',         `${peakKwp.toFixed(2)} kWp`],
+    ['Annual Production',  `${annualKwh.toLocaleString()} kWh`],
+    ['Self-Consumption',   `${selfConsume.toFixed(0)}%`],
+    ['CO\u2082 Reduction', `${co2.toFixed(2)} t/yr`],
+    ['System Cost',        fmtEur(systemCost)],
+    ['Annual Savings',     fmtEur(annualSavings)],
+    ['Payback Period',     payback === Infinity ? 'N/A' : `${payback.toFixed(1)} years`],
+  ];
+  drawTable(doc, kpiRows, margin, y, contentW);
+
+  addPageNumber(1);
+
+  // ── PAGE 2: Full Installation Details ────────────────────────────────────
+  doc.addPage();
+  y = margin;
+
+  // Section header bar
+  doc.setFillColor(...C.headerBg);
+  doc.rect(0, 0, pw, 16, 'F');
+  doc.setFontSize(13);
+  doc.setTextColor(...C.headerFg);
+  doc.text('Installation Details', pw / 2, 11, { align: 'center' });
+  y = 24;
 
   // ── Building Parameters ───────────────────────────────────────────────
   y = drawSectionTitle(doc, 'Building Parameters', margin, y, contentW);
@@ -124,16 +183,13 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
   // ── System Results ────────────────────────────────────────────────────
   y = drawSectionTitle(doc, 'System Results', margin, y, contentW);
 
-  const annualKwh = stats.annualKwh;
-  const peakKwp   = stats.peakPowerKw;
-  const selfConsume = projectData.getSelfConsumptionRate(annualKwh);
-
   const systemRows = [
     ['Total Panels',       `${stats.panelCount}`],
     ['Peak Power',         `${peakKwp.toFixed(2)} kWp`],
     ['Annual Production',  `${annualKwh.toLocaleString()} kWh`],
     ['Annual Consumption', `${projectData.annualConsumption.toLocaleString()} kWh`],
     ['Self-Consumption',   `${selfConsume.toFixed(0)}%`],
+    ['CO\u2082 Reduction', `${co2.toFixed(2)} t/yr`],
   ];
   y = drawTable(doc, systemRows, margin, y, contentW);
   y += 6;
@@ -141,13 +197,6 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
   // ── Financial Analysis ────────────────────────────────────────────────
   y = drawSectionTitle(doc, 'Financial Analysis', margin, y, contentW);
 
-  const systemCost = projectData.getSystemCost(peakKwp);
-  const annualSavings = projectData.getAnnualSavings(annualKwh);
-  const payback = projectData.getPaybackPeriod(peakKwp, annualKwh);
-  const lifetimeSavings = projectData.getLifetimeSavings(peakKwp, annualKwh);
-  const co2 = projectData.getCO2Reduction(annualKwh);
-
-  const fmtEur = v => `\u20AC ${v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   const financialRows = [
     ['System Cost',      fmtEur(systemCost)],
     ['Annual Savings',   fmtEur(annualSavings)],
@@ -157,52 +206,7 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
     ['Feed-in Tariff',   `\u20AC${projectData.feedInTariff}/kWh`],
     ['System Lifetime',  `${projectData.lifetime} years`],
   ];
-  y = drawTable(doc, financialRows, margin, y, contentW);
-
-  addPageNumber(1);
-
-  // ── PAGE 2: 3D Screenshot ────────────────────────────────────────────
-  doc.addPage();
-  y = margin;
-
-  // Section header bar
-  doc.setFillColor(...C.headerBg);
-  doc.rect(0, 0, pw, 16, 'F');
-  doc.setFontSize(13);
-  doc.setTextColor(...C.headerFg);
-  doc.text('3D Simulation View', pw / 2, 11, { align: 'center' });
-  y = 22;
-
-  try {
-    let imgData;
-    if (renderContext && renderContext.renderer && renderContext.composer && renderContext.camera) {
-      imgData = captureHighResScreenshot(
-        canvasEl, renderContext.renderer, renderContext.composer, renderContext.camera, 2
-      );
-    } else {
-      imgData = canvasEl.toDataURL('image/jpeg', 0.92);
-    }
-    const imgW = contentW;
-    const imgH = imgW * (canvasEl.height / canvasEl.width);
-    const maxImgH = ph - y - 30;
-    const finalH = Math.min(imgH, maxImgH);
-
-    // Subtle border around image
-    doc.setDrawColor(...C.border);
-    doc.setLineWidth(0.3);
-    doc.rect(margin - 0.5, y - 0.5, imgW + 1, finalH + 1, 'S');
-    doc.addImage(imgData, 'JPEG', margin, y, imgW, finalH);
-    y += finalH + 4;
-  } catch (e) {
-    doc.setFontSize(10);
-    doc.setTextColor(200, 50, 50);
-    doc.text('Could not capture 3D view.', margin, y);
-    y += 8;
-  }
-
-  doc.setFontSize(9);
-  doc.setTextColor(...C.light);
-  doc.text(`${projectData.name} \u2014 3D Simulation View`, pw / 2, y, { align: 'center' });
+  drawTable(doc, financialRows, margin, y, contentW);
 
   addPageNumber(2);
 
@@ -249,7 +253,7 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
     y += 5;
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const monthRows = months.map((m, i) => [m, `${Math.round(stats.monthlyEnergy[i]).toLocaleString()} kWh`]);
-    y = drawTable(doc, monthRows, margin, y, contentW, true);
+    drawTable(doc, monthRows, margin, y, contentW, true);
   }
 
   addPageNumber(3);

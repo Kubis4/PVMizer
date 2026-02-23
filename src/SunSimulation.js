@@ -118,6 +118,9 @@ export class SunSimulation {
       const cosAz = (Math.sin(elevation) * Math.sin(latRad) - Math.sin(declination)) /
                     (cosElev * Math.cos(latRad));
       azimuth = Math.acos(Math.max(-1, Math.min(1, cosAz)));
+      // Southern hemisphere: sun transits via the north, so reflect the azimuth
+      // across the east-west axis before applying the morning/afternoon flip.
+      if (lat < 0) azimuth = Math.PI - azimuth;
       // Azimuth from North, measured clockwise
       // In the morning (hourAngle < 0) sun is east; afternoon (hourAngle > 0) sun is west
       if (hourAngle > 0) azimuth = 2 * Math.PI - azimuth;

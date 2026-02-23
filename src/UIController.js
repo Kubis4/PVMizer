@@ -120,6 +120,26 @@ export class UIController {
     this.monthlyChart.update('none');
   }
 
+  setPVGISStatus(status) {
+    const el = document.getElementById('pvgisStatus');
+    if (!el) return;
+    if (status === 'loading') {
+      el.style.display = '';
+      el.textContent = '⏳ Loading climate data (PVGIS)…';
+      el.className = 'pvgis-status pvgis-loading';
+    } else if (status === 'loaded') {
+      el.style.display = '';
+      el.textContent = '✓ PVGIS climate data applied';
+      el.className = 'pvgis-status pvgis-loaded';
+    } else if (status === 'error') {
+      el.style.display = '';
+      el.textContent = '⚠ Climate data unavailable — using clear-sky model';
+      el.className = 'pvgis-status pvgis-error';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+
   // ─── Stats ────────────────────────────────────────────────────────────────
   updateStats({ currentPowerKw, peakPowerKw, panelCount, totalAreaM2,
                 dailyKwh, annualKwh, sunElevation, sunAzimuth, irradiance,
@@ -592,7 +612,11 @@ export class UIController {
     });
 
     // ── Language selector ────────────────────────────────────────────────────
-    document.getElementById('languageSelect')?.addEventListener('change', e => {
+    const langSelect = document.getElementById('languageSelect');
+    // Sync select to the language already loaded from localStorage
+    const savedLang = localStorage.getItem('pvmizer-lang');
+    if (savedLang && langSelect) langSelect.value = savedLang;
+    langSelect?.addEventListener('change', e => {
       setLanguage(e.target.value);
     });
 

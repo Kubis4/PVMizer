@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, shell, dialog, globalShortcut, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, globalShortcut, ipcMain, net } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 
@@ -23,6 +23,7 @@ function createWindow() {
     backgroundColor: '#0a0e1a',
     show:            false,       // show after ready-to-show to avoid white flash
     title:           'PVMizer 2.0',
+    icon:            path.join(__dirname, '..', 'assets', 'app_icon.png'),
     autoHideMenuBar: true,        // hide menu bar (show with Alt)
     webPreferences: {
       nodeIntegration:  false,
@@ -145,6 +146,18 @@ app.whenReady().then(() => {
   buildMenu();
   createWindow();
 
+  // IPC: Fetch PVGIS monthly irradiance data (bypasses renderer CORS restrictions)
+  // Uses Electron's net.fetch() which handles redirects and system proxy/certificates.
+  // PVGIS-SARAH2 covers Europe/Africa; falls back to PVGIS-ERA5 for global coverage.
+  ipcMain.handle('pvgis-fetch', async (event, { lat, lon }) => {
+    const base = `https://re.jrc.ec.europa.eu/api/v5_2/MRcalc?lat=${lat}&lon=${lon}&horirrad=1&outputformat=json`;
+    for (const db of ['PVGIS-SARAH2', 'PVGIS-ERA5']) {
+      const res = await net.fetch(`${base}&raddatabase=${db}`);
+      if (res.ok) return res.json();
+    }
+    throw new Error('PVGIS: location not covered by any available database');
+  });
+
   // IPC: Save PDF file via native Save As dialog
   ipcMain.handle('save-pdf', async (event, { buffer, defaultName }) => {
     const { filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -159,6 +172,22 @@ app.whenReady().then(() => {
     } catch (err) {
       return { success: false, error: err.message };
     }
+  });
+
+  // IPC: Geocode an address via Nominatim (OpenStreetMap), bypasses renderer CORS
+  ipcMain.handle('nominatim-geocode', async (event, { address }) => {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+    const res = await net.fetch(url, {
+      headers: { 'User-Agent': 'PVMizer/2.0 (solar installation simulator)' }
+    });
+    if (!res.ok) throw new Error(`Nominatim HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.length) return null;
+    return {
+      lat: parseFloat(data[0].lat),
+      lon: parseFloat(data[0].lon),
+      display_name: data[0].display_name,
+    };
   });
 
   // If a second instance tried to open, focus the existing window

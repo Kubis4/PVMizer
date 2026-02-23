@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; font-src 'self'; worker-src 'none';">
   <title>PVMizer 2.0</title>
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
@@ -19,8 +20,8 @@
 
   <!-- Project name header (visible only in project mode) -->
   <div id="projectNameHeader" class="project-name-header" style="display:none">
-    <span id="projectNameText" class="project-name-text" title="Click to edit project">My Solar Project</span>
-    <button id="exportPdfBtn" class="project-header-icon-btn" title="Export PDF Report">
+    <span id="projectNameText" class="project-name-text" data-i18n="label.clickToEdit" data-i18n-attr="title" title="Click to edit project">My Solar Project</span>
+    <button id="exportPdfBtn" class="project-header-icon-btn" data-i18n="btn.exportPdf" data-i18n-attr="title" title="Export PDF Report">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
         <polyline points="14 2 14 8 20 8"/>
@@ -41,7 +42,7 @@
       <h2 data-i18n="panel.title">Solar Simulation</h2>
       <div class="header-actions">
         <button class="header-btn" id="settingsBtn" title="Settings">&#x2699;&#xFE0F;</button>
-        <button class="header-btn home-btn" id="homeBtn" title="Back to project selection">&#x1F3E0;</button>
+        <button class="header-btn home-btn" id="homeBtn" data-i18n="btn.homeTooltip" data-i18n-attr="title" title="Back to project selection">&#x1F3E0;</button>
         <button class="collapse-btn" id="collapseLeft">&#x25C4;</button>
       </div>
     </div>
@@ -273,45 +274,43 @@
           <div class="placement-pills">
             <button class="orientation-btn active" data-orient="portrait" data-i18n="orient.portrait">Portrait</button>
             <button class="orientation-btn" data-orient="landscape" data-i18n="orient.landscape">Landscape</button>
-            <button class="orientation-btn" data-orient="alt-rows">Max Fill</button>
           </div>
         </div>
         <!-- Panel fill strategy (global default) — hidden in sandbox mode -->
         <div class="placement-toggle" id="fillOrderToggle" style="margin-top:6px">
-          <span class="toggle-label">Fill Order</span>
+          <span class="toggle-label" data-i18n="label.fillOrder">Fill Order</span>
           <div class="placement-pills">
-            <button class="fill-btn active" data-fill="bottom-up">&#x2B06; Bottom</button>
-            <button class="fill-btn" data-fill="top-down">&#x2B07; Top</button>
-            <button class="fill-btn" data-fill="center-out">&#x25CE; Center</button>
+            <button class="fill-btn active" data-fill="bottom-up" data-i18n="fill.bottom">&#x2B06; Bottom</button>
+            <button class="fill-btn" data-fill="top-down" data-i18n="fill.top">&#x2B07; Top</button>
+            <button class="fill-btn" data-fill="center-out" data-i18n="fill.center">&#x25CE; Center</button>
           </div>
         </div>
         <!-- Panel count display (project mode only) -->
         <div class="panel-count-display" id="panelCountDisplay" style="display:none">
-          <span>Placed: <strong id="panelCountPlaced">0</strong></span>
+          <span><span data-i18n="label.placed">Placed</span>: <strong id="panelCountPlaced">0</strong></span>
           <span id="panelCountRemainingWrap" style="display:none">
-            &nbsp;| Remaining: <strong id="panelCountRemaining">0</strong>
+            &nbsp;| <span data-i18n="label.remaining">Remaining</span>: <strong id="panelCountRemaining">0</strong>
           </span>
         </div>
         <!-- Per-face config (shown when a face is selected) -->
         <div id="faceConfigPanel" class="face-config-panel" style="display:none">
           <div class="face-config-header">
-            <span class="face-config-title">Face <span id="faceConfigName">--</span></span>
-            <button class="face-config-reset" id="faceConfigReset">Reset</button>
+            <span class="face-config-title"><span data-i18n="label.face">Face</span> <span id="faceConfigName">--</span></span>
+            <button class="face-config-reset" id="faceConfigReset" data-i18n="btn.reset">Reset</button>
           </div>
           <div class="placement-toggle" style="margin-top:4px">
-            <span class="toggle-label">Orientation</span>
+            <span class="toggle-label" data-i18n="label.orientation">Orientation</span>
             <div class="placement-pills">
-              <button class="fill-btn face-orient-btn" data-orient="portrait">Portrait</button>
-              <button class="fill-btn face-orient-btn" data-orient="landscape">Landscape</button>
-              <button class="fill-btn face-orient-btn" data-orient="alt-rows">Max Fill</button>
+              <button class="fill-btn face-orient-btn" data-orient="portrait" data-i18n="orient.portrait">Portrait</button>
+              <button class="fill-btn face-orient-btn" data-orient="landscape" data-i18n="orient.landscape">Landscape</button>
             </div>
           </div>
           <div class="placement-toggle" style="margin-top:4px">
-            <span class="toggle-label">Fill Order</span>
+            <span class="toggle-label" data-i18n="label.fillOrder">Fill Order</span>
             <div class="placement-pills">
-              <button class="fill-btn face-fill-btn" data-fill="bottom-up">Bottom</button>
-              <button class="fill-btn face-fill-btn" data-fill="top-down">Top</button>
-              <button class="fill-btn face-fill-btn" data-fill="center-out">Center</button>
+              <button class="fill-btn face-fill-btn" data-fill="bottom-up" data-i18n="fill.bottom">Bottom</button>
+              <button class="fill-btn face-fill-btn" data-fill="top-down" data-i18n="fill.top">Top</button>
+              <button class="fill-btn face-fill-btn" data-fill="center-out" data-i18n="fill.center">Center</button>
             </div>
           </div>
         </div>
@@ -466,6 +465,7 @@
     <!-- Monthly Energy Chart -->
     <section class="section">
       <h3 data-i18n="section.monthlyEnergy">Monthly Energy (kWh)</h3>
+      <div id="pvgisStatus" class="pvgis-status" style="display:none"></div>
       <div class="chart-container">
         <canvas id="monthlyChart"></canvas>
       </div>
@@ -479,7 +479,7 @@
     <button class="obstacle-btn" data-type="skylight" title="Skylight" data-i18n-html="obs.skylight">&#x1FA9F; Skylight</button>
     <button class="obstacle-btn" data-type="hvac" title="HVAC Unit" data-i18n-html="obs.hvac">&#x2744; HVAC</button>
     <button class="obstacle-btn" data-type="tree" title="Pine Tree" data-i18n-html="obs.tree">&#x1F332; Pine</button>
-    <button class="obstacle-btn" data-type="leaftree" title="Leaf Tree">&#x1F333; Leaf</button>
+    <button class="obstacle-btn" data-type="leaftree" title="Leaf Tree" data-i18n-html="obs.leaf">&#x1F333; Leaf</button>
     <button class="obstacle-btn" data-type="pole" title="Utility Pole" data-i18n-html="obs.pole">&#x26A1; Pole</button>
     <button class="obstacle-btn-delete" id="deleteAllObstaclesBtn" title="Remove all obstacles" data-i18n-html="obs.clear">&#x1F5D1; Clear</button>
     <div id="obstacleSizeRow" class="obstacle-size-row" style="display:none">
@@ -517,13 +517,13 @@
       <span class="ib-value" id="ibPanels">--</span>
     </div>
     <div class="info-bar-item">
-      <span class="ib-label">Weather</span>
+      <span class="ib-label" data-i18n="ib.weather">Weather</span>
       <select class="ib-weather-select" id="weatherSelect">
-        <option value="clear">&#x2600;&#xFE0F; Clear</option>
-        <option value="partly_cloudy">&#x26C5; Partly Cloudy</option>
-        <option value="cloudy">&#x2601;&#xFE0F; Cloudy</option>
-        <option value="rainy">&#x1F327;&#xFE0F; Rainy</option>
-        <option value="snowy">&#x1F328;&#xFE0F; Snowy</option>
+        <option value="clear" data-i18n="weather.clear">&#x2600;&#xFE0F; Clear</option>
+        <option value="partly_cloudy" data-i18n="weather.partlyCloudy">&#x26C5; Partly Cloudy</option>
+        <option value="cloudy" data-i18n="weather.cloudy">&#x2601;&#xFE0F; Cloudy</option>
+        <option value="rainy" data-i18n="weather.rainy">&#x1F327;&#xFE0F; Rainy</option>
+        <option value="snowy" data-i18n="weather.snowy">&#x1F328;&#xFE0F; Snowy</option>
       </select>
     </div>
     <div class="info-bar-item heatmap-item">

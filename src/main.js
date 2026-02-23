@@ -21,6 +21,7 @@ import { HelpModal }                       from './HelpModal.js';
 import { ObstacleManager, OBSTACLE_TYPES } from './ObstacleManager.js';
 import { PanelRecommender }               from './PanelRecommender.js';
 import { WeatherEffects }                from './WeatherEffects.js';
+import { setLanguage }                   from './i18n.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Application state
@@ -73,6 +74,10 @@ const state = {
   // Weather
   weatherCondition:  'clear',
   weatherMultiplier: 1.0,
+
+  // PVGIS real irradiance data (project mode only)
+  pvgisCorrections: null,  // Array<number>[12] | null
+  pvgisLoading:     false,
 
   // Panel fill strategy
   fillStrategy:    'bottom-up',  // 'bottom-up' | 'top-down' | 'center-out'
@@ -148,6 +153,8 @@ obstacleManager.onSelect = (obs) => { if (ui) ui.showObstacleControls(obs); };
 const weatherEffects  = new WeatherEffects(scene);
 const helpModal      = new HelpModal();
 const startupScreen  = new StartupScreen();
+// Restore saved language after startup screen DOM is ready
+{ const saved = localStorage.getItem('pvmizer-lang'); if (saved) setLanguage(saved); }
 
 const groundMesh = createGround();
 scene.add(groundMesh);
@@ -536,7 +543,29 @@ function onLocationChange() {
   rebuildPanels();
   updateFaceLabels();
   if (ui) ui.updateEquatorLayoutLabel(state.latitude);
-  recalcDayCurve();
+  // Invalidate cached PVGIS data and re-fetch for new location (all modes)
+  state.pvgisCorrections = null;
+  loadPVGISData();
+}
+
+async function loadPVGISData() {
+  if (state.pvgisLoading) return;
+  state.pvgisLoading = true;
+  ui?.setPVGISStatus('loading');
+  try {
+    const { fetchPVGISCorrections } = await import('./PVGISClient.js');
+    state.pvgisCorrections = await fetchPVGISCorrections(
+      state.latitude, state.longitude, state.date.getFullYear()
+    );
+    ui?.setPVGISStatus('loaded');
+    recalcDayCurve();
+  } catch (e) {
+    console.warn('PVGIS fetch failed, using clear-sky model:', e);
+    state.pvgisCorrections = null;
+    ui?.setPVGISStatus('error');
+  } finally {
+    state.pvgisLoading = false;
+  }
 }
 
 function recalcDayCurve() {
@@ -550,8 +579,13 @@ function recalcDayCurve() {
     ui.updateDayCurve(dayCurve, state.timeHours, peakPowerKw);
 
     setTimeout(() => {
+      // When PVGIS real climate data is available, use it directly (multiplier = 1.0)
+      // because PVGIS already encodes actual cloud cover — don't double-apply the UI weather.
+      // Without PVGIS, fall back to weatherMultiplier as a rough climate estimate.
+      const annualMult = state.pvgisCorrections ? 1.0 : state.weatherMultiplier;
       monthlyEnergy = EnergyCalc.calculateMonthlyEnergy(
-        state.latitude, state.longitude, state.date.getFullYear(), panelInfos, state.weatherMultiplier
+        state.latitude, state.longitude, state.date.getFullYear(), panelInfos,
+        annualMult, state.pvgisCorrections
       );
       ui.updateMonthlyChart(monthlyEnergy);
       if (state.appMode === 'project') updateProjectFinancials();
@@ -757,7 +791,9 @@ function updateHeatmapColors(sunVector) {
     let shadingMult = 1.0;
     if (dot > 0.01 && obstacleManager && obstacleManager.obstacles.length > 0) {
       const sf = obstacleManager.getShadingFactor(mesh.position.clone(), sunVector);
-      shadingMult = 1.0 - sf * 0.75;
+      // Same non-linear string-effect model as EnergyCalc: 1 - (1 - sf)^3
+      const effectiveLoss = sf > 0 ? 1 - Math.pow(1 - sf, 3) : 0;
+      shadingMult = 1.0 - effectiveLoss;
     }
     const effective = dot * shadingMult;
     mesh.material.color.copy(_irradianceColor(effective));
@@ -1024,6 +1060,56 @@ async function init() {
   });
 }
 
+/**
+ * Insert (or remove) a project-specific location preset button in the sidebar.
+ * When projectFormData is non-null and has geocoded lat/lon, a button is added
+ * as the first preset (marked active). Passing null removes any existing button.
+ */
+function _updateProjectPresetButton(projectFormData) {
+  const presets = document.querySelector('.location-presets');
+  if (!presets) return;
+
+  // Remove any old project button first
+  const old = document.getElementById('projectPresetBtn');
+  if (old) old.remove();
+
+  if (!projectFormData) return;
+
+  // Build a short label from the first segment of the address
+  const address = projectFormData.address || '';
+  const shortName = address
+    ? address.split(',')[0].trim().slice(0, 22)   // max 22 chars
+    : `${projectFormData.lat.toFixed(2)}°N`;
+
+  const btn = document.createElement('button');
+  btn.id = 'projectPresetBtn';
+  btn.className = 'preset-btn preset-btn-project';
+  btn.dataset.lat = projectFormData.lat;
+  btn.dataset.lon = projectFormData.lon;
+  btn.textContent = `📍 ${shortName}`;
+  btn.title = address;   // full address as tooltip
+
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const lat = projectFormData.lat;
+    const lon = projectFormData.lon;
+    document.getElementById('latitude').value  = lat;
+    document.getElementById('longitude').value = lon;
+    document.getElementById('latitudeVal').textContent  = `${lat.toFixed(1)}\u00b0`;
+    document.getElementById('longitudeVal').textContent = `${lon.toFixed(1)}\u00b0`;
+    state.latitude  = lat;
+    state.longitude = lon;
+    onLocationChange();
+    ui?.updateEquatorLayoutLabel(lat);
+  });
+
+  // Insert as first item and mark active (location was just applied)
+  presets.insertBefore(btn, presets.firstChild);
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
 function applyMode(mode, projectFormData) {
   state.appMode = mode;
   if (mode === 'project' && projectFormData) {
@@ -1034,6 +1120,11 @@ function applyMode(mode, projectFormData) {
     state.houseDepth = projectFormData.houseDepth  || state.houseDepth;
     state.wallHeight = projectFormData.wallHeight  || state.wallHeight;
     state.roofPitch  = projectFormData.roofPitch   || state.roofPitch;
+    // Apply geocoded location if the user provided an address
+    if (projectFormData.lat != null && projectFormData.lon != null) {
+      state.latitude  = projectFormData.lat;
+      state.longitude = projectFormData.lon;
+    }
   }
 
   // Create UIController only once; reuse on subsequent launches
@@ -1050,6 +1141,10 @@ function applyMode(mode, projectFormData) {
 
   // Sync UI sliders/buttons to match state (important for project mode)
   syncUIToState();
+
+  // Fetch real climate data from PVGIS (all modes — based on selected location)
+  state.pvgisCorrections = null;
+  loadPVGISData();
 
   // Show/hide financial panel, fill order, and project name based on mode
   const finPanel = document.getElementById('financialSection');
@@ -1071,6 +1166,11 @@ function applyMode(mode, projectFormData) {
       projHeader.style.display = 'none';
     }
   }
+
+  // Add / refresh the project location preset button in the sidebar
+  _updateProjectPresetButton(
+    mode === 'project' && projectFormData?.lat != null ? projectFormData : null
+  );
 
   // Hide loading overlay
   setTimeout(() => {
