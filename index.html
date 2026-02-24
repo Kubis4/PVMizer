@@ -245,6 +245,13 @@
             <span class="value-display" id="panelTiltVal">15&#xB0;</span>
           </div>
         </div>
+        <div class="control-row" id="panelSideTiltRow" style="display:none">
+          <label data-i18n="label.sideTilt">Side Tilt</label>
+          <div class="slider-group">
+            <input type="range" id="panelSideTilt" min="-30" max="30" value="0" step="1">
+            <span class="value-display" id="panelSideTiltVal">0&#xB0;</span>
+          </div>
+        </div>
       </div>
       <!-- Panel customization (always visible) -->
       <div id="customizePanel">
@@ -262,7 +269,7 @@
             <span class="value-display" id="panelHeightVal">1.65m</span>
           </div>
         </div>
-        <div class="control-row">
+        <div class="control-row" id="panelNominalWpRow">
           <label data-i18n="label.nominalPower">Nominal Power</label>
           <div class="slider-group">
             <input type="range" id="panelNominalWp" min="150" max="600" value="440" step="5">
@@ -293,6 +300,14 @@
             <button class="fill-btn" data-fill="center-out" data-i18n="fill.center">&#x25CE; Center</button>
           </div>
         </div>
+        <!-- Sandbox panel limit (sandbox mode only) -->
+        <div class="control-row" id="sandboxPanelLimitRow" style="display:none">
+          <label data-i18n="label.sandboxLimit">Panel Limit</label>
+          <div class="slider-group">
+            <input type="number" id="sandboxPanelLimit" min="1" max="9999" step="1" placeholder="&#x221E;" class="sandbox-limit-input">
+            <button id="clearSandboxLimit" title="No limit" class="sandbox-limit-clear-btn">&#x221E;</button>
+          </div>
+        </div>
         <!-- Panel count display (project mode only) -->
         <div class="panel-count-display" id="panelCountDisplay" style="display:none">
           <span><span data-i18n="label.placed">Placed</span>: <strong id="panelCountPlaced">0</strong></span>
@@ -305,13 +320,6 @@
           <div class="face-config-header">
             <span class="face-config-title"><span data-i18n="label.face">Face</span> <span id="faceConfigName">--</span></span>
             <button class="face-config-reset" id="faceConfigReset" data-i18n="btn.reset">Reset</button>
-          </div>
-          <div class="placement-toggle" style="margin-top:4px">
-            <span class="toggle-label" data-i18n="label.orientation">Orientation</span>
-            <div class="placement-pills">
-              <button class="fill-btn face-orient-btn" data-orient="portrait" data-i18n="orient.portrait">Portrait</button>
-              <button class="fill-btn face-orient-btn" data-orient="landscape" data-i18n="orient.landscape">Landscape</button>
-            </div>
           </div>
           <div class="placement-toggle" style="margin-top:4px">
             <span class="toggle-label" data-i18n="label.fillOrder">Fill Order</span>
@@ -331,9 +339,9 @@
       <div class="location-presets">
         <button class="preset-btn active" data-lat="48.3" data-lon="18.1">Nitra, SK</button>
         <button class="preset-btn" data-lat="51.5" data-lon="-0.1">London</button>
-        <button class="preset-btn" data-lat="48.9" data-lon="2.3">Paris</button>
+        <button class="preset-btn" data-lat="64.1" data-lon="-21.9">Reykjavik</button>
         <button class="preset-btn" data-lat="40.7" data-lon="-74.0">New York</button>
-        <button class="preset-btn" data-lat="35.7" data-lon="139.7">Tokyo</button>
+        <button class="preset-btn" data-lat="-26.2" data-lon="28.0">Johannesburg</button>
         <button class="preset-btn" data-lat="-33.9" data-lon="151.2">Sydney</button>
         <button class="preset-btn" data-lat="25.2" data-lon="55.3">Dubai</button>
       </div>
@@ -482,23 +490,39 @@
 
   <!-- Obstacle Toolbar (above info bar) -->
   <div class="obstacle-toolbar" id="obstacleToolbar">
-    <span class="toolbar-label" data-i18n="toolbar.obstacles">Obstacles</span>
-    <button class="obstacle-btn" data-type="chimney" title="Chimney" data-i18n-html="obs.chimney">&#x1F9F1; Chimney</button>
-    <button class="obstacle-btn" data-type="skylight" title="Skylight" data-i18n-html="obs.skylight">&#x1FA9F; Skylight</button>
-    <button class="obstacle-btn" data-type="hvac" title="HVAC Unit" data-i18n-html="obs.hvac">&#x2744; HVAC</button>
-    <button class="obstacle-btn" data-type="tree" title="Pine Tree" data-i18n-html="obs.tree">&#x1F332; Pine</button>
-    <button class="obstacle-btn" data-type="leaftree" title="Leaf Tree" data-i18n-html="obs.leaf">&#x1F333; Leaf</button>
-    <button class="obstacle-btn" data-type="pole" title="Utility Pole" data-i18n-html="obs.pole">&#x26A1; Pole</button>
-    <button class="obstacle-btn-delete" id="deleteAllObstaclesBtn" title="Remove all obstacles" data-i18n-html="obs.clear">&#x1F5D1; Clear</button>
-    <div id="obstacleSizeRow" class="obstacle-size-row" style="display:none">
-      <span class="toolbar-label" data-i18n="label.size">Size</span>
-      <input type="range" id="obstacleSize" min="0.3" max="3.0" value="1.0" step="0.1" style="width:80px">
-      <span class="value-display" id="obstacleSizeVal" style="min-width:28px;font-size:10px">1.0&#xD7;</span>
+    <!-- Controls row: appears above buttons when an obstacle is selected -->
+    <div class="obstacle-controls-row" id="obstacleControlsRow" style="display:none">
+      <div id="obstacleSizeRow" class="obstacle-size-row" style="display:none">
+        <span class="toolbar-label" data-i18n="label.size">Size</span>
+        <input type="range" id="obstacleSize" min="0.3" max="3.0" value="1.0" step="0.1" style="width:110px">
+        <span class="value-display" id="obstacleSizeVal" style="min-width:32px;font-size:11px">1.0&#xD7;</span>
+      </div>
+      <div id="skylightWidthRow" class="obstacle-size-row" style="display:none">
+        <span class="toolbar-label" data-i18n="label.skylightW">Width</span>
+        <input type="range" id="skylightWidth" min="0.5" max="5.0" value="1.0" step="0.1" style="width:110px">
+        <span class="value-display" id="skylightWidthVal" style="min-width:32px;font-size:11px">1.0m</span>
+      </div>
+      <div id="skylightLengthRow" class="obstacle-size-row" style="display:none">
+        <span class="toolbar-label" data-i18n="label.skylightL">Length</span>
+        <input type="range" id="skylightLength" min="0.5" max="5.0" value="1.0" step="0.1" style="width:110px">
+        <span class="value-display" id="skylightLengthVal" style="min-width:32px;font-size:11px">1.0m</span>
+      </div>
+      <div id="obstacleRotateRow" class="obstacle-size-row" style="display:none">
+        <span class="toolbar-label" data-i18n="label.rotate">Rotate</span>
+        <input type="range" id="obstacleRotate" min="0" max="359" value="0" step="1" style="width:110px">
+        <span class="value-display" id="obstacleRotateVal" style="min-width:32px;font-size:11px">0&#xB0;</span>
+      </div>
     </div>
-    <div id="obstacleRotateRow" class="obstacle-size-row" style="display:none">
-      <span class="toolbar-label" data-i18n="label.rotate">Rotate</span>
-      <input type="range" id="obstacleRotate" min="0" max="359" value="0" step="1" style="width:80px">
-      <span class="value-display" id="obstacleRotateVal" style="min-width:28px;font-size:10px">0&#xB0;</span>
+    <!-- Buttons row: always visible -->
+    <div class="obstacle-buttons-row">
+      <span class="toolbar-label" data-i18n="toolbar.obstacles">Obstacles</span>
+      <button class="obstacle-btn" data-type="chimney" title="Chimney" data-i18n-html="obs.chimney">&#x1F9F1; Chimney</button>
+      <button class="obstacle-btn" data-type="skylight" title="Skylight" data-i18n-html="obs.skylight">&#x1FA9F; Skylight</button>
+      <button class="obstacle-btn" data-type="hvac" title="HVAC Unit" data-i18n-html="obs.hvac">&#x2744; HVAC</button>
+      <button class="obstacle-btn" data-type="tree" title="Pine Tree" data-i18n-html="obs.tree">&#x1F332; Pine</button>
+      <button class="obstacle-btn" data-type="leaftree" title="Leaf Tree" data-i18n-html="obs.leaf">&#x1F333; Leaf</button>
+      <button class="obstacle-btn" data-type="pole" title="Utility Pole" data-i18n-html="obs.pole">&#x26A1; Pole</button>
+      <button class="obstacle-btn-delete" id="deleteAllObstaclesBtn" title="Remove all obstacles" data-i18n-html="obs.clear">&#x1F5D1; Clear</button>
     </div>
   </div>
 

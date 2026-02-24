@@ -41,6 +41,7 @@ const state = {
   panelEfficiency: 0.20,    // derived: panelNominalWp / (panelW * panelH * 1000)
   panelGap:        0.10,
   panelTilt:       15,
+  panelSideTilt:   0,      // lateral tilt on pitched roofs (degrees, -30..+30)
   panelWidth:      1.0,
   panelHeight:     1.65,
   panelTempCoeff:  0.004,
@@ -84,6 +85,9 @@ const state = {
 
   // Panel fill strategy
   fillStrategy:    'bottom-up',  // 'bottom-up' | 'top-down' | 'center-out'
+
+  // Manual panel count limit (0 = use recommendation / no limit)
+  manualPanelLimit: 0,
 
   // Per-face overrides
   faceConfig:    {},    // { [faceIdx]: { fillStrategy?, panelOrientation? } }
@@ -231,6 +235,13 @@ const app = {
     if (fillToggle) fillToggle.style.display = 'none';
     const panelCountEl = document.getElementById('panelCountDisplay');
     if (panelCountEl) panelCountEl.style.display = 'none';
+    state.manualPanelLimit = 0;
+    const sandboxLimitRow = document.getElementById('sandboxPanelLimitRow');
+    if (sandboxLimitRow) sandboxLimitRow.style.display = '';
+    const sandboxLimitInp = document.getElementById('sandboxPanelLimit');
+    if (sandboxLimitInp) sandboxLimitInp.value = '';
+    const nomWpRow = document.getElementById('panelNominalWpRow');
+    if (nomWpRow) nomWpRow.style.display = '';
     const projHeader = document.getElementById('projectNameHeader');
     if (projHeader) projHeader.style.display = 'none';
     rebuildRoof();
@@ -278,10 +289,11 @@ const app = {
 
       // Panels
       panelNominalWp: state.panelNominalWp, panelGap: state.panelGap,
-      panelTilt: state.panelTilt, panelWidth: state.panelWidth,
+      panelTilt: state.panelTilt, panelSideTilt: state.panelSideTilt,
+      panelWidth: state.panelWidth,
       panelHeight: state.panelHeight, panelTempCoeff: state.panelTempCoeff,
       panelOrientation: state.panelOrientation, flatLayout: state.flatLayout,
-      fillStrategy: state.fillStrategy,
+      fillStrategy: state.fillStrategy, manualPanelLimit: state.manualPanelLimit,
 
       // Location & time
       latitude: state.latitude, longitude: state.longitude,
@@ -336,12 +348,14 @@ const app = {
     state.panelNominalWp  = data.panelNominalWp  ?? 440;
     state.panelGap        = data.panelGap         ?? 0.10;
     state.panelTilt       = data.panelTilt        ?? 15;
+    state.panelSideTilt   = data.panelSideTilt    ?? 0;
     state.panelWidth      = data.panelWidth       ?? 1.0;
     state.panelHeight     = data.panelHeight      ?? 1.65;
     state.panelTempCoeff  = data.panelTempCoeff   ?? 0.004;
     state.panelOrientation = data.panelOrientation || 'portrait';
     state.flatLayout      = data.flatLayout       || 'south';
     state.fillStrategy    = data.fillStrategy     || 'bottom-up';
+    state.manualPanelLimit = data.manualPanelLimit ?? 0;
 
     state.latitude  = data.latitude  ?? 48.3;
     state.longitude = data.longitude ?? 18.1;
@@ -376,10 +390,10 @@ const app = {
       for (const obsData of data.obstacles) obstacleManager.loadObstacle(obsData);
     }
 
-    // Rebuild scene
+    // Rebuild scene (keepObstacles=true — obstacles were just loaded above)
     setPanelDimensions(state.panelWidth, state.panelHeight);
     setTempCoeff(state.panelTempCoeff);
-    rebuildRoof();
+    rebuildRoof(true);
     sunSim.updateTrajectory(state.latitude, state.longitude, state.date, state.showSunPath);
     syncUIToState();
 
@@ -395,6 +409,9 @@ const app = {
       houseDepth: state.houseDepth, wallHeight: state.wallHeight,
       roofPitch: state.roofPitch,
     } : null);
+
+    // Hide startup screen after successful load
+    startupScreen.hide();
   },
 };
 
@@ -406,7 +423,13 @@ function setRoofType(type) {
   rebuildRoof();
 }
 
-function rebuildRoof() {
+function rebuildRoof(keepObstacles = false) {
+  // When roof geometry changes, obstacles would float inside the new shape — remove them.
+  if (!keepObstacles) {
+    obstacleManager.deleteAll();
+    if (ui) ui.showObstacleControls(null);
+  }
+
   // Save per-face config keyed by orientation name before clearing faces
   state._savedFaceConfigs = {};
   for (const [idx, conf] of Object.entries(state.faceConfig)) {
@@ -463,6 +486,13 @@ function rebuildRoof() {
         state.activeFaces.add(i);
       }
     }
+    // If no faces matched (e.g. switching from pyramid/hip → flat whose orientation
+    // isn't in the saved set), fall back to the sun-facing defaults for the new roof.
+    if (state.activeFaces.size === 0) {
+      state.activeFaces = new Set(
+        getSunFacingFaces(roofFaces, state.latitude).map(f => roofFaces.indexOf(f))
+      );
+    }
   } else {
     state.activeFaces = new Set(
       getSunFacingFaces(roofFaces, state.latitude).map(f => roofFaces.indexOf(f))
@@ -480,6 +510,7 @@ function rebuildRoof() {
 
   rebuildPanels();
   updateFaceLabels();
+  if (ui) ui.showFaceConfig(null, state.faceConfig, roofFaces, state);
   buildHeatmapOverlay();
 }
 
@@ -554,9 +585,11 @@ function rebuildPanels() {
     gridData[j] = { blockedCells: blocked, enabledCells: null };
   }
 
-  // In project mode, cap panel count to the recommended maximum
+  // Determine panel count limit: manual override > project recommendation > no limit
   let maxPanels = Infinity;
-  if (state.appMode === 'project' && state.projectData) {
+  if (state.manualPanelLimit > 0) {
+    maxPanels = state.manualPanelLimit;
+  } else if (state.appMode === 'project' && state.projectData) {
     const rec = PanelRecommender.recommend({
       roofType:     state.roofType,
       houseWidth:   state.houseWidth,
@@ -583,6 +616,7 @@ function rebuildPanels() {
     flatLayout,
     maxPanels,
     perFaceConfig,
+    sideTiltDeg:   isFlatRoof ? 0 : state.panelSideTilt,
   });
 
   peakPowerKw = EnergyCalc.peakPower(solarPanels.getPanelInfos());
@@ -648,7 +682,6 @@ function updateFaceLabels() {
   for (const s of _faceLabelSprites) { scene.remove(s); s.material.map.dispose(); }
   _faceLabelSprites = [];
   if (!roofFaces.length) return;
-
   for (let i = 0; i < roofFaces.length; i++) {
     const face   = roofFaces[i];
     // Skip faces that cannot receive panels (downward normals or near-vertical end gables)
@@ -683,10 +716,12 @@ function updateFaceLabels() {
 function onLocationChange() {
   sunSim.updateTrajectory(state.latitude, state.longitude, state.date, state.showSunPath);
 
-  // Flip camera to opposite side when hemisphere changes so sun trajectory is visible
-  const southSide = state.latitude >= 0;  // Northern hemisphere: camera on south (+Z)
+  // Flip camera when hemisphere changes so panels are visible.
+  // Geometry uses +Z=North. NH panels face south (−Z side) → camera at −Z.
+  // SH panels face north (+Z side) → camera at +Z.
+  const wantNegativeZ = state.latitude >= 0; // NH: camera should be south (−Z)
   const camZ = camera.position.z;
-  if ((southSide && camZ < 0) || (!southSide && camZ > 0)) {
+  if ((wantNegativeZ && camZ > 0) || (!wantNegativeZ && camZ < 0)) {
     camera.position.z = -camZ;
     controls.update();
   }
@@ -769,6 +804,7 @@ function syncUIToState() {
     if (slider) slider.value = value;
     if (display) display.textContent = fmt(value);
   };
+  setSlider('panelSideTilt', 'panelSideTiltVal', state.panelSideTilt, v => `${v > 0 ? '+' : ''}${Math.round(v)}\u00B0`);
   setSlider('houseWidth',  'houseWidthVal',  state.houseWidth,  v => `${v.toFixed(1)}m`);
   setSlider('houseDepth',  'houseDepthVal',  state.houseDepth,  v => `${v.toFixed(1)}m`);
   setSlider('wallHeight',  'wallHeightVal',  state.wallHeight,  v => `${v.toFixed(2)}m`);
@@ -778,6 +814,13 @@ function syncUIToState() {
   document.querySelectorAll('.roof-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.roof === state.roofType);
   });
+  // Sync sandbox panel limit input
+  const sandboxLimitInp = document.getElementById('sandboxPanelLimit');
+  if (sandboxLimitInp) {
+    sandboxLimitInp.value = state.manualPanelLimit > 0 ? state.manualPanelLimit : '';
+  }
+  // Sync roof-specific UI visibility
+  if (ui) ui._updateRoofSpecificUI(state.roofType);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1295,6 +1338,13 @@ function applyMode(mode, projectFormData) {
     state.houseDepth = projectFormData.houseDepth  || state.houseDepth;
     state.wallHeight = projectFormData.wallHeight  || state.wallHeight;
     state.roofPitch  = projectFormData.roofPitch   || state.roofPitch;
+    // Apply panel power from form so it matches the recommendation
+    if (projectFormData.panelNominalWp > 0) {
+      state.panelNominalWp = projectFormData.panelNominalWp;
+    }
+    // Apply manual panel count override if provided
+    state.manualPanelLimit = projectFormData.manualPanelCount > 0
+      ? projectFormData.manualPanelCount : 0;
     // Apply geocoded location if the user provided an address
     if (projectFormData.lat != null && projectFormData.lon != null) {
       state.latitude  = projectFormData.lat;
@@ -1325,11 +1375,21 @@ function applyMode(mode, projectFormData) {
   const finPanel = document.getElementById('financialSection');
   if (finPanel) finPanel.style.display = mode === 'project' ? '' : 'none';
 
-  // Hide fill order and panel count in sandbox — only meaningful in project mode
+  // Clear manual limit when switching to sandbox (each mode manages its own limit)
+  if (mode === 'sandbox') state.manualPanelLimit = 0;
+
+  // Show/hide mode-specific panel controls
   const fillToggle = document.getElementById('fillOrderToggle');
   if (fillToggle) fillToggle.style.display = mode === 'project' ? '' : 'none';
   const panelCountEl = document.getElementById('panelCountDisplay');
   if (panelCountEl) panelCountEl.style.display = mode === 'project' ? '' : 'none';
+  const sandboxLimitRow = document.getElementById('sandboxPanelLimitRow');
+  if (sandboxLimitRow) sandboxLimitRow.style.display = mode === 'sandbox' ? '' : 'none';
+
+  // In project mode, panel Wp is locked to the project form value (changing it via
+  // slider would silently shift the recommended panel count, confusing the user)
+  const nomWpRow = document.getElementById('panelNominalWpRow');
+  if (nomWpRow) nomWpRow.style.display = mode === 'project' ? 'none' : '';
 
   const projHeader = document.getElementById('projectNameHeader');
   const projNameText = document.getElementById('projectNameText');

@@ -693,8 +693,9 @@ canvas#powerChart, canvas#monthlyChart {
   inset: 0;
   background: linear-gradient(135deg, #050810 0%, #0a1428 50%, #050810 100%);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  overflow-y: auto;
   z-index: 2000;
   opacity: 1;
   transition: opacity 0.6s ease;
@@ -708,8 +709,9 @@ canvas#powerChart, canvas#monthlyChart {
 .startup-inner {
   width: 100%;
   max-width: 760px;
-  padding: 32px 24px;
+  padding: 32px 24px 70px;
   text-align: center;
+  margin: auto; /* centers vertically when there's space; scrolls when content overflows */
 }
 
 .startup-header {
@@ -984,8 +986,8 @@ canvas#powerChart, canvas#monthlyChart {
 }
 
 .roof-preview-img {
-  width: 64px;
-  height: 48px;
+  width: auto;
+  height: 36px;
   object-fit: contain;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.05);
@@ -997,7 +999,33 @@ canvas#powerChart, canvas#monthlyChart {
 .form-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
   justify-content: flex-end;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+.form-actions-spacer {
+  flex: 1;
+}
+.form-validation-msg {
+  color: #f87171;
+  font-size: 12px;
+  background: rgba(248,113,113,0.1);
+  border: 1px solid rgba(248,113,113,0.3);
+  border-radius: 6px;
+  padding: 7px 12px;
+  margin-top: 12px;
+}
+/* Required field: red asterisk on label */
+.form-required > label::after {
+  content: ' *';
+  color: #f87171;
+}
+/* Error state: red border + glow on input/select */
+.form-required.has-error input,
+.form-required.has-error select {
+  border-color: #f87171 !important;
+  box-shadow: 0 0 0 2px rgba(248,113,113,0.2);
 }
 
 .form-back-btn {
@@ -1230,14 +1258,35 @@ canvas#powerChart, canvas#monthlyChart {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  align-items: stretch;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 5px 8px;
   backdrop-filter: blur(20px);
   z-index: 99;
+  gap: 0;
+}
+
+.obstacle-buttons-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.obstacle-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 2px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.obstacle-controls-row .toolbar-label {
+  font-size: 10px;
 }
 
 .toolbar-label {
@@ -1304,9 +1353,6 @@ canvas#powerChart, canvas#monthlyChart {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: 6px;
-  padding-left: 8px;
-  border-left: 1px solid var(--border);
 }
 
 /* ===== HELP MODAL ===== */
@@ -1693,6 +1739,39 @@ kbd {
 }
 .control-row.disabled label { color: var(--text-dim); }
 
+/* Sandbox panel limit input + clear button */
+.sandbox-limit-input {
+  width: 70px;
+  background: var(--bg-section);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 12px;
+  outline: none;
+  font-family: inherit;
+  text-align: center;
+}
+.sandbox-limit-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb, 99,179,237), 0.15);
+}
+.sandbox-limit-clear-btn {
+  background: var(--bg-section);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 5px;
+  padding: 2px 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.sandbox-limit-clear-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 .settings-note {
   font-size: 10px;
   color: var(--text-dim);
@@ -1812,6 +1891,24 @@ kbd {
 .rec-highlight {
   color: var(--accent) !important;
   font-size: 15px !important;
+}
+.rec-manual-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+}
+.rec-manual-row input {
+  background: var(--bg-section);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 4px 8px;
+  font-size: 13px;
 }
 
 /* ===== FORM RECOMMEND BUTTON ===== */

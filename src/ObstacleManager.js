@@ -10,7 +10,7 @@ import * as THREE from 'three';
 // footprint = physical bounding radius of the obstacle model at scale 1.0
 export const OBSTACLE_TYPES = {
   chimney:   { label: 'Chimney',      icon: '🧱', roofOnly: true,  footprint: 0.40, shadingFactor: 0.15 },
-  skylight:  { label: 'Skylight',     icon: '🪟', roofOnly: true,  footprint: 0.50, shadingFactor: 0.05 },
+  skylight:  { label: 'Skylight',     icon: '🪟', roofOnly: true,  footprint: 0.42, shadingFactor: 0.05 },
   hvac:      { label: 'HVAC Unit',    icon: '❄',  roofOnly: true,  footprint: 0.72, shadingFactor: 0.10 },
   tree:      { label: 'Pine Tree',    icon: '🌲', roofOnly: false, footprint: 1.10, shadingFactor: 0.40 },
   leaftree:  { label: 'Leaf Tree',    icon: '🌳', roofOnly: false, footprint: 1.30, shadingFactor: 0.45 },
@@ -79,8 +79,9 @@ export class ObstacleManager {
     this._dragObs.position.copy(pos);
     this._dragObs.group.position.copy(pos);
     this._alignGroupToSurface(this._dragObs.group, this._dragObs.type, hitNormal);
-    // Update stored surface quaternion so spin is re-applied correctly
-    this._dragObs._surfaceQuat = this._dragObs.group.quaternion.clone();
+    // Update stored surface quaternion and normal so spin is re-applied correctly
+    this._dragObs._surfaceQuat   = this._dragObs.group.quaternion.clone();
+    this._dragObs._surfaceNormal = hitNormal.clone();
     // Re-apply any existing rotation after surface alignment
     if (this._dragObs.rotationY) this.setSelectedRotation(this._dragObs.rotationY);
     return true;
@@ -208,6 +209,7 @@ export class ObstacleManager {
       scale:         1.0,
       rotationY:     0,
       _surfaceQuat:  group.quaternion.clone(),   // surface alignment before any spin
+      _surfaceNormal: hitNormal.clone(),          // normal of the surface it was placed on
     };
     this._obstacles.push(obs);
     this._selectObstacle(obs);
@@ -330,6 +332,9 @@ export class ObstacleManager {
 
     const blocked = new Set();
     for (const obs of this._obstacles) {
+      // Skip obstacles placed on a surface not aligned with this face (e.g. wall obstacle vs roof face)
+      if (obs._surfaceNormal && obs._surfaceNormal.dot(face.normal) < 0.3) continue;
+
       const toObs = obs.position.clone().sub(face.center);
       const obsR  = toObs.dot(face.rightDir);
       const obsU  = toObs.dot(face.upDir);
@@ -337,13 +342,34 @@ export class ObstacleManager {
       if (dist > 3.0) continue;
 
       const blockR = obs.footprint + panelHalf;
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const cellR = startR + c * stepW;
-          const cellU = startU + r * stepH;
-          const dr = cellR - obsR, du = cellU - obsU;
-          if (Math.sqrt(dr * dr + du * du) < blockR) {
-            blocked.add(r * cols + c);
+
+      if (isFlatRoof && flatLayout === 'east-west') {
+        // E-W pair cells span two individual panels side by side.
+        // Check both individual panel centers so an obstacle near either panel of the pair is caught.
+        const halfPairR = panelH * cosT / 2;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const cellR = startR + c * stepW;   // center of the E-W pair
+            const cellU = startU + r * stepH;
+            for (const offsetR of [-halfPairR, halfPairR]) {
+              const dr = (cellR + offsetR) - obsR;
+              const du = cellU - obsU;
+              if (Math.sqrt(dr * dr + du * du) < blockR) {
+                blocked.add(r * cols + c);
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const cellR = startR + c * stepW;
+            const cellU = startU + r * stepH;
+            const dr = cellR - obsR, du = cellU - obsU;
+            if (Math.sqrt(dr * dr + du * du) < blockR) {
+              blocked.add(r * cols + c);
+            }
           }
         }
       }
@@ -362,6 +388,19 @@ export class ObstacleManager {
   getSelectedScale() {
     return this._selected ? (this._selected.scale || 1.0) : 1.0;
   }
+
+  /** Scale skylight width (X) and length (Z) independently. */
+  setSelectedScaleXZ(scaleX, scaleZ) {
+    if (!this._selected) return;
+    this._selected.scaleX = scaleX;
+    this._selected.scaleZ = scaleZ;
+    this._selected.group.scale.x = scaleX;
+    this._selected.group.scale.z = scaleZ;
+    this._selected.footprint = OBSTACLE_TYPES[this._selected.type].footprint * Math.max(scaleX, scaleZ);
+  }
+
+  getSelectedScaleX() { return this._selected ? (this._selected.scaleX || 1.0) : 1.0; }
+  getSelectedScaleZ() { return this._selected ? (this._selected.scaleZ || 1.0) : 1.0; }
 
   /** Rotate the currently selected obstacle around its local Y axis (degrees). */
   setSelectedRotation(deg) {
@@ -415,6 +454,8 @@ export class ObstacleManager {
       type:        obs.type,
       position:    { x: obs.position.x, y: obs.position.y, z: obs.position.z },
       scale:       obs.scale,
+      scaleX:      obs.scaleX,
+      scaleZ:      obs.scaleZ,
       rotationY:   obs.rotationY,
       surfaceQuat: {
         x: obs._surfaceQuat.x, y: obs._surfaceQuat.y,
@@ -438,9 +479,11 @@ export class ObstacleManager {
       data.surfaceQuat.z, data.surfaceQuat.w
     );
 
-    // Apply scale
-    const s = data.scale || 1.0;
-    group.scale.set(s, s, s);
+    // Apply scale (skylight supports independent X/Z scaling)
+    const s  = data.scale  || 1.0;
+    const sx = data.scaleX || s;
+    const sz = data.scaleZ || s;
+    group.scale.set(sx, s, sz);
 
     // Apply rotation: surface alignment + Y spin
     const spin = new THREE.Quaternion().setFromEuler(
@@ -450,16 +493,22 @@ export class ObstacleManager {
 
     this.scene.add(group);
 
+    // Derive the surface normal from the saved surface quaternion (+Y rotated by surfQ)
+    const surfaceNormal = new THREE.Vector3(0, 1, 0).applyQuaternion(surfQ).normalize();
+
     const obs = {
       id:            this._nextId++,
       type:          data.type,
       group,
       position:      pos,
-      footprint:     typeDef.footprint * s,
+      footprint:     typeDef.footprint * Math.max(sx, sz),
       shadingFactor: typeDef.shadingFactor,
       scale:         s,
+      scaleX:        sx,
+      scaleZ:        sz,
       rotationY:     data.rotationY || 0,
       _surfaceQuat:  surfQ,
+      _surfaceNormal: surfaceNormal,
     };
     this._obstacles.push(obs);
   }

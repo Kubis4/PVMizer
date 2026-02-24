@@ -163,7 +163,7 @@ export class UIController {
     this._set('ibDate',          date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
     this._set('ibPower',         `${fmt(currentPowerKw, 2)} kW`);
     this._set('ibPanels',        panelCount);
-    this._set('ibRoofType',      roofType.charAt(0).toUpperCase() + roofType.slice(1));
+    this._set('ibRoofType',      t(`roof.${roofType}`) || roofType.charAt(0).toUpperCase() + roofType.slice(1));
 
     // Sun dial widget
     this._set('dialTime',      fmtTime(timeHours));
@@ -317,25 +317,56 @@ export class UIController {
   }
 
   showObstacleControls(obs) {
-    this._setObstacleControlsVisible(!!obs);
-    if (obs) {
+    this._setObstacleControlsVisible(false);
+    if (!obs) return;
+
+    const isSkylight = obs.type === 'skylight';
+
+    if (isSkylight) {
+      // Show independent width / length sliders for skylight
+      const wRow = document.getElementById('skylightWidthRow');
+      const lRow = document.getElementById('skylightLengthRow');
+      if (wRow) wRow.style.display = '';
+      if (lRow) lRow.style.display = '';
+      const wSlider = document.getElementById('skylightWidth');
+      const wVal    = document.getElementById('skylightWidthVal');
+      const lSlider = document.getElementById('skylightLength');
+      const lVal    = document.getElementById('skylightLengthVal');
+      if (wSlider) wSlider.value = (obs.scaleX || 1.0).toFixed(1);
+      if (wVal)    wVal.textContent = `${(obs.scaleX || 1.0).toFixed(1)}m`;
+      if (lSlider) lSlider.value = (obs.scaleZ || 1.0).toFixed(1);
+      if (lVal)    lVal.textContent = `${(obs.scaleZ || 1.0).toFixed(1)}m`;
+    } else {
+      // Show uniform size slider for all other obstacles
+      const sizeRow = document.getElementById('obstacleSizeRow');
+      if (sizeRow) sizeRow.style.display = '';
       const sizeSlider = document.getElementById('obstacleSize');
       const sizeVal    = document.getElementById('obstacleSizeVal');
       if (sizeSlider) sizeSlider.value = (obs.scale || 1.0).toFixed(1);
       if (sizeVal)    sizeVal.textContent = `${(obs.scale || 1.0).toFixed(1)}×`;
-
-      const rotSlider = document.getElementById('obstacleRotate');
-      const rotVal    = document.getElementById('obstacleRotateVal');
-      if (rotSlider) rotSlider.value = Math.round(obs.rotationY || 0);
-      if (rotVal)    rotVal.textContent = `${Math.round(obs.rotationY || 0)}°`;
     }
+
+    // Rotate row always shown when an obstacle is selected
+    const rotRow  = document.getElementById('obstacleRotateRow');
+    if (rotRow) rotRow.style.display = '';
+    const rotSlider = document.getElementById('obstacleRotate');
+    const rotVal    = document.getElementById('obstacleRotateVal');
+    if (rotSlider) rotSlider.value = Math.round(obs.rotationY || 0);
+    if (rotVal)    rotVal.textContent = `${Math.round(obs.rotationY || 0)}°`;
+
+    // Show the controls wrapper row (sliders are now visible)
+    const wrapper = document.getElementById('obstacleControlsRow');
+    if (wrapper) wrapper.style.display = '';
   }
 
   _setObstacleControlsVisible(visible) {
-    const sizeRow = document.getElementById('obstacleSizeRow');
-    const rotRow  = document.getElementById('obstacleRotateRow');
-    if (sizeRow) sizeRow.style.display = visible ? '' : 'none';
-    if (rotRow)  rotRow.style.display  = visible ? '' : 'none';
+    ['obstacleSizeRow', 'obstacleRotateRow', 'skylightWidthRow', 'skylightLengthRow'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = visible ? '' : 'none';
+    });
+    // Also hide/show the controls wrapper row
+    const wrapper = document.getElementById('obstacleControlsRow');
+    if (wrapper) wrapper.style.display = visible ? '' : 'none';
   }
 
   _set(id, value) {
@@ -431,6 +462,15 @@ export class UIController {
       this.app.rebuildPanels();
     });
 
+    // Panel side tilt (pitched roofs only — gable, hip, pyramid)
+    document.getElementById('panelSideTilt')?.addEventListener('input', e => {
+      const v = parseInt(e.target.value, 10);
+      this.app.state.panelSideTilt = v;
+      const sign = v > 0 ? '+' : '';
+      document.getElementById('panelSideTiltVal').textContent = `${sign}${v}\u00b0`;
+      this.app.rebuildPanels();
+    });
+
     // Panel customize toggle
     document.getElementById('customizeToggleBtn')?.addEventListener('click', () => {
       const panel = document.getElementById('customizePanel');
@@ -449,12 +489,16 @@ export class UIController {
       }
     });
 
-    // Panel orientation buttons
+    // Panel orientation buttons (global — clears any per-face overrides so it applies uniformly)
     document.querySelectorAll('.orientation-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.orientation-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.app.state.panelOrientation = btn.dataset.orient;
+        // Clear per-face orientation overrides so global setting takes effect on all faces
+        for (const conf of Object.values(this.app.state.faceConfig)) {
+          delete conf.panelOrientation;
+        }
         this.app.rebuildPanels();
       });
     });
@@ -475,19 +519,6 @@ export class UIController {
         document.querySelectorAll('.fill-btn:not(.face-fill-btn):not(.face-orient-btn)').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.app.state.fillStrategy = btn.dataset.fill;
-        this.app.rebuildPanels();
-      });
-    });
-
-    // Per-face orientation buttons
-    document.querySelectorAll('.face-orient-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = this.app.state.selectedFace;
-        if (idx === null || idx === undefined) return;
-        if (!this.app.state.faceConfig[idx]) this.app.state.faceConfig[idx] = {};
-        this.app.state.faceConfig[idx].panelOrientation = btn.dataset.orient;
-        document.querySelectorAll('.face-orient-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
         this.app.rebuildPanels();
       });
     });
@@ -541,11 +572,27 @@ export class UIController {
       this._setObstacleControlsVisible(false);
     });
 
-    // Obstacle size slider
+    // Obstacle size slider (non-skylight obstacles)
     document.getElementById('obstacleSize')?.addEventListener('input', e => {
       const v = parseFloat(e.target.value);
       document.getElementById('obstacleSizeVal').textContent = `${v.toFixed(1)}×`;
       this.app.obstacleManager.setSelectedScale(v);
+      this.app.rebuildPanels();
+    });
+
+    // Skylight width slider
+    document.getElementById('skylightWidth')?.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('skylightWidthVal').textContent = `${v.toFixed(1)}m`;
+      this.app.obstacleManager.setSelectedScaleXZ(v, this.app.obstacleManager.getSelectedScaleZ());
+      this.app.rebuildPanels();
+    });
+
+    // Skylight length slider
+    document.getElementById('skylightLength')?.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('skylightLengthVal').textContent = `${v.toFixed(1)}m`;
+      this.app.obstacleManager.setSelectedScaleXZ(this.app.obstacleManager.getSelectedScaleX(), v);
       this.app.rebuildPanels();
     });
 
@@ -554,6 +601,20 @@ export class UIController {
       const v = parseInt(e.target.value, 10);
       document.getElementById('obstacleRotateVal').textContent = `${v}°`;
       this.app.obstacleManager.setSelectedRotation(v);
+      this.app.rebuildPanels?.();
+    });
+
+    // Sandbox panel limit input
+    document.getElementById('sandboxPanelLimit')?.addEventListener('input', e => {
+      const v = parseInt(e.target.value, 10);
+      if (this.app.state) this.app.state.manualPanelLimit = (v > 0) ? v : 0;
+      this.app.rebuildPanels?.();
+    });
+    document.getElementById('clearSandboxLimit')?.addEventListener('click', () => {
+      const inp = document.getElementById('sandboxPanelLimit');
+      if (inp) inp.value = '';
+      if (this.app.state) this.app.state.manualPanelLimit = 0;
+      this.app.rebuildPanels?.();
     });
 
     // Help button
@@ -759,13 +820,9 @@ export class UIController {
     } else if (nameEl) {
       nameEl.textContent = `${faceIdx + 1}`;
     }
-    // Highlight active buttons based on per-face config or global defaults
+    // Highlight active fill strategy buttons based on per-face config or global default
     const conf = faceConfig[faceIdx] || {};
-    const activeOrient = conf.panelOrientation || (appState ? appState.panelOrientation : 'portrait');
-    const activeFill   = conf.fillStrategy     || (appState ? appState.fillStrategy : 'bottom-up');
-    document.querySelectorAll('.face-orient-btn').forEach(b => {
-      b.classList.toggle('active', activeOrient === b.dataset.orient);
-    });
+    const activeFill = conf.fillStrategy || (appState ? appState.fillStrategy : 'bottom-up');
     document.querySelectorAll('.face-fill-btn').forEach(b => {
       b.classList.toggle('active', activeFill === b.dataset.fill);
     });
@@ -782,16 +839,24 @@ export class UIController {
     const ridgeRow      = document.getElementById('ridgeLengthRow');
     const pitchRow      = document.getElementById('pitchAngleRow');
     const flatOptions   = document.getElementById('flatRoofOptions');
-    // Ridge Length: visible always, greyed out when not hip
+    // Ridge Length: only visible for hip roofs
     if (ridgeRow) {
+      ridgeRow.style.display = roofType === 'hip' ? '' : 'none';
       ridgeRow.classList.toggle('disabled', roofType !== 'hip');
       const input = ridgeRow.querySelector('input');
       if (input) input.disabled = roofType !== 'hip';
     }
     // Flat-roof layout options (tilt + layout toggle): only for flat roofs
     if (flatOptions) flatOptions.style.display = roofType === 'flat' ? '' : 'none';
-    // Grey out pitch angle for flat roofs (no slope to configure)
-    if (pitchRow) pitchRow.classList.toggle('disabled', roofType === 'flat');
+    // Pitch angle: hidden for flat roofs (no slope)
+    if (pitchRow) {
+      pitchRow.style.display = roofType === 'flat' ? 'none' : '';
+      const input = pitchRow.querySelector('input');
+      if (input) input.disabled = roofType === 'flat';
+    }
+    // Side tilt: only meaningful for pitched roofs
+    const sideTiltRow = document.getElementById('panelSideTiltRow');
+    if (sideTiltRow) sideTiltRow.style.display = roofType === 'flat' ? 'none' : '';
   }
 
   init() {

@@ -170,6 +170,7 @@ export class SolarPanels {
       maxPanels     = Infinity,
       perFaceConfig = [],
       fillStrategy  = 'bottom-up',
+      sideTiltDeg   = 0,
     } = config;
 
     for (let i = 0; i < faces.length; i++) {
@@ -188,7 +189,8 @@ export class SolarPanels {
         gd.enabledCells  || null,
         gd.blockedCells  || new Set(),
         flatTiltDeg, equatorDir, flatLayout,
-        maxPanels, strategy, isMixed ? orient : null, panelW, panelH
+        maxPanels, strategy, isMixed ? orient : null, panelW, panelH,
+        sideTiltDeg
       );
     }
     return this.panels;
@@ -198,7 +200,8 @@ export class SolarPanels {
                      placementMode, enabledCells, blockedCells,
                      flatTiltDeg = 0, equatorDir = null, flatLayout = 'south',
                      maxPanels = Infinity, fillStrategy = 'bottom-up',
-                     mixedLayout = null, basePanelW = panelW, basePanelH = panelH) {
+                     mixedLayout = null, basePanelW = panelW, basePanelH = panelH,
+                     sideTiltDeg = 0) {
     const { center, normal, rightDir, upDir, width, height, orientation, energyNormal, verts2d } = face;
 
     // Tilt is only meaningful on truly flat faces — use a strict threshold
@@ -209,7 +212,7 @@ export class SolarPanels {
     const cosT = Math.cos(tiltRad);
     const sinT = Math.sin(tiltRad);
 
-    const polyMargin    = EDGE_MARGIN + Math.max(panelW, panelH) / 2;
+    const polyMargin    = EDGE_MARGIN + Math.min(panelW, panelH) / 2;
     const mat           = getPanelMaterial();
     const area          = panelW * panelH;
     // Height above roof surface to panel center (rises with tilt)
@@ -295,6 +298,14 @@ export class SolarPanels {
       const localZ = new THREE.Vector3().crossVectors(rightDir, normal).normalize();
       quat = new THREE.Quaternion().setFromRotationMatrix(
         new THREE.Matrix4().makeBasis(rightDir, normal, localZ));
+
+      // Side tilt: rotate panel around the face's up-slope axis (tilts panel east/west)
+      if (!isFlatRoof && sideTiltDeg !== 0) {
+        const sideTiltRad = sideTiltDeg * Math.PI / 180;
+        const sideTiltQ = new THREE.Quaternion().setFromAxisAngle(upDir.clone().normalize(), sideTiltRad);
+        panelNormal = panelNormal.clone().applyQuaternion(sideTiltQ).normalize();
+        quat.premultiply(sideTiltQ);
+      }
     }
 
     // ── Max Fill layout: try every portrait/landscape split, pick best ────
