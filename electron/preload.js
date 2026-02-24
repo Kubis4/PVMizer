@@ -9,4 +9,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   geocodeAddress: (address) =>
     ipcRenderer.invoke('nominatim-geocode', { address }),
+
+  saveProject: (jsonString, defaultName) =>
+    ipcRenderer.invoke('save-project', { jsonString, defaultName }),
+
+  openProject: () =>
+    ipcRenderer.invoke('open-project'),
 });

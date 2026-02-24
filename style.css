@@ -818,6 +818,23 @@ canvas#powerChart, canvas#monthlyChart {
   line-height: 1.4;
 }
 
+.startup-load-row {
+  text-align: center;
+  margin-top: 18px;
+}
+
+.load-project-btn {
+  background: rgba(100,160,250,0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(100,160,250,0.3);
+  font-size: 14px;
+  padding: 10px 28px;
+}
+.load-project-btn:hover {
+  background: rgba(100,160,250,0.28);
+  border-color: rgba(100,160,250,0.5);
+}
+
 .mode-btn {
   border: none;
   border-radius: 8px;

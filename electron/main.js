@@ -190,6 +190,38 @@ app.whenReady().then(() => {
     };
   });
 
+  // IPC: Save project file via native Save As dialog
+  ipcMain.handle('save-project', async (event, { jsonString, defaultName }) => {
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Project',
+      defaultPath: defaultName || 'project.pvmz',
+      filters: [{ name: 'PVMizer Project', extensions: ['pvmz'] }],
+    });
+    if (!filePath) return { success: false };
+    try {
+      fs.writeFileSync(filePath, jsonString, 'utf-8');
+      return { success: true, filePath };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // IPC: Open project file via native Open dialog
+  ipcMain.handle('open-project', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Open Project',
+      filters: [{ name: 'PVMizer Project', extensions: ['pvmz'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || !filePaths.length) return { success: false };
+    try {
+      const data = fs.readFileSync(filePaths[0], 'utf-8');
+      return { success: true, data, filePath: filePaths[0] };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   // If a second instance tried to open, focus the existing window
   app.on('second-instance', () => {
     if (mainWindow) {

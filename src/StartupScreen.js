@@ -11,6 +11,7 @@ export class StartupScreen {
   constructor() {
     this._el = null;
     this._cb = null;
+    this._loadCb = null;
     this._geocodedLat = null;
     this._geocodedLon = null;
     this._geocodedName = null;
@@ -42,6 +43,11 @@ export class StartupScreen {
             <p data-i18n="startup.projectDesc">Plan a real PV installation. Enter building dimensions and annual consumption — the app recommends panel count, calculates yearly energy production, savings, payback period and generates a full PDF report.</p>
             <button class="mode-btn project-btn" id="projectSetupBtn" data-i18n="startup.projectBtn">Set Up Project →</button>
           </div>
+        </div>
+
+        <!-- Load saved project -->
+        <div class="startup-load-row" id="startupLoadRow">
+          <button class="mode-btn load-project-btn" id="startupLoadBtn" data-i18n="startup.loadProject">&#x1F4C2; Load Saved Project</button>
         </div>
 
         <!-- Footer -->
@@ -145,6 +151,10 @@ export class StartupScreen {
   _bindEvents() {
     document.getElementById('sandboxLaunchBtn').addEventListener('click', () => {
       this._launch('sandbox', null);
+    });
+
+    document.getElementById('startupLoadBtn').addEventListener('click', () => {
+      if (this._loadCb) this._loadCb();
     });
 
     document.getElementById('projectSetupBtn').addEventListener('click', () => {
@@ -268,6 +278,7 @@ export class StartupScreen {
   }
 
   onModeSelected(cb) { this._cb = cb; }
+  onLoadProject(cb) { this._loadCb = cb; }
 
   show() {
     this._el.style.display = '';

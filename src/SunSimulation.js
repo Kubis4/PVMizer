@@ -6,6 +6,9 @@
 
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
 const DEG = Math.PI / 180;
 const RAD = 180 / Math.PI;
@@ -264,94 +267,169 @@ export class SunSimulation {
   }
 
   updateTrajectory(lat, lon, date, visible) {
-    // Remove old trajectory lines
-    if (this.trajectoryLine) {
-      this.scene.remove(this.trajectoryLine);
-      this.trajectoryLine.geometry.dispose();
-      this.trajectoryLine = null;
+    // ── Cleanup old objects ──
+    const dispose = (obj) => {
+      if (!obj) return;
+      this.scene.remove(obj);
+      obj.geometry?.dispose();
+      if (obj.material) {
+        if (obj.material.dispose) obj.material.dispose();
+      }
+    };
+    dispose(this.trajectoryLine);  this.trajectoryLine = null;
+    dispose(this._twilightLine);   this._twilightLine  = null;
+
+    // Markers + glow sprites
+    for (const m of [this._sunriseMarker, this._sunsetMarker]) {
+      if (m) {
+        if (m.userData.glowSprite) { this.scene.remove(m.userData.glowSprite); }
+        dispose(m);
+      }
     }
-    if (this._twilightLine) {
-      this.scene.remove(this._twilightLine);
-      this._twilightLine.geometry.dispose();
-      this._twilightLine = null;
+    this._sunriseMarker = null;
+    this._sunsetMarker  = null;
+
+    // Hour tick marks
+    if (this._hourMarkers) {
+      for (const m of this._hourMarkers) dispose(m);
     }
-    // Remove sunrise/sunset markers
-    if (this._sunriseMarker) {
-      this.scene.remove(this._sunriseMarker);
-      this._sunriseMarker.geometry?.dispose();
-      this._sunriseMarker = null;
-    }
-    if (this._sunsetMarker) {
-      this.scene.remove(this._sunsetMarker);
-      this._sunsetMarker.geometry?.dispose();
-      this._sunsetMarker = null;
-    }
+    this._hourMarkers = [];
+
     if (!visible) return;
 
-    const dayPts     = [];   // elevation > 0
-    const twilightPts = [];  // -6° < elevation <= 0 (civil twilight)
+    // ── Compute trajectory points ──
+    const dayPts      = [];   // elevation > 0
+    const dayElev     = [];   // track elevation for color gradient
+    const twilightPts = [];   // -6° < elevation <= 0
 
     for (let h = 0; h <= 24; h += 0.1) {
       const pos = SunSimulation.calculateSolarPosition(lat, lon, date, h);
-      // Clamp elevation to 0 for horizon rendering of twilight
       const v = SunSimulation.getSunVector(Math.max(pos.elevation, -6), pos.azimuth);
       const pt = v.clone().multiplyScalar(this.SUN_DIST * 0.85);
       if (pos.elevation > 0) {
         dayPts.push(pt);
+        dayElev.push(pos.elevation);
       } else if (pos.elevation > -6) {
         twilightPts.push(pt);
       }
     }
 
-    // Twilight arc (dashed, dim orange)
+    const res = new THREE.Vector2(window.innerWidth, window.innerHeight);
+
+    // ── Twilight arc (dashed, dim orange, Line2) ──
     if (twilightPts.length >= 2) {
-      const geom = new THREE.BufferGeometry().setFromPoints(twilightPts);
-      const mat  = new THREE.LineDashedMaterial({
+      const positions = [];
+      for (const pt of twilightPts) positions.push(pt.x, pt.y, pt.z);
+      const geom = new LineGeometry();
+      geom.setPositions(positions);
+      const mat = new LineMaterial({
         color: 0xff8c00,
+        linewidth: 2,
         transparent: true,
-        opacity: 0.35,
-        dashSize: 0.4,
-        gapSize: 0.3,
+        opacity: 0.4,
         depthWrite: false,
-        depthTest: false
+        depthTest: false,
+        worldUnits: false,
+        dashed: true,
+        dashSize: 3,
+        gapSize: 2,
+        resolution: res,
       });
-      this._twilightLine = new THREE.Line(geom, mat);
+      this._twilightLine = new Line2(geom, mat);
       this._twilightLine.computeLineDistances();
       this._twilightLine.renderOrder = 998;
       this.scene.add(this._twilightLine);
     }
 
-    // Daylight arc (solid yellow)
+    // ── Daylight arc (thick, gradient color, Line2) ──
     if (dayPts.length >= 2) {
-      const geom = new THREE.BufferGeometry().setFromPoints(dayPts);
-      const mat  = new THREE.LineBasicMaterial({
-        color: 0xffcc00,
+      const positions = [];
+      const colors    = [];
+      const maxElev   = Math.max(...dayElev, 1);
+
+      for (let i = 0; i < dayPts.length; i++) {
+        const pt = dayPts[i];
+        positions.push(pt.x, pt.y, pt.z);
+        // Color gradient: warm orange at horizon → bright gold at peak
+        const t = dayElev[i] / maxElev;  // 0 at horizon, 1 at peak
+        colors.push(
+          1.0,                   // R: always full
+          0.55 + t * 0.35,      // G: 0.55 (orange) → 0.90 (gold)
+          0.05 + t * 0.15       // B: dim warm
+        );
+      }
+
+      const geom = new LineGeometry();
+      geom.setPositions(positions);
+      geom.setColors(colors);
+      const mat = new LineMaterial({
+        linewidth: 3,
+        vertexColors: true,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.85,
         depthWrite: false,
-        depthTest: false
+        depthTest: false,
+        worldUnits: false,
+        resolution: res,
       });
-      this.trajectoryLine = new THREE.Line(geom, mat);
+      this.trajectoryLine = new Line2(geom, mat);
+      this.trajectoryLine.computeLineDistances();
       this.trajectoryLine.renderOrder = 999;
       this.scene.add(this.trajectoryLine);
     }
 
-    // Sunrise / sunset markers (small spheres at horizon)
+    // ── Sunrise / sunset markers (glowing spheres) ──
     const { sunrise, sunset } = SunSimulation.getSunriseSunset(lat, lon, date);
-    const markerGeo = new THREE.SphereGeometry(0.3, 8, 8);
     if (sunrise !== null && sunset !== null) {
       const addMarker = (timeH, color) => {
         const pos = SunSimulation.calculateSolarPosition(lat, lon, date, timeH);
         const v   = SunSimulation.getSunVector(0, pos.azimuth);
-        const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, depthTest: false });
-        const m   = new THREE.Mesh(markerGeo, mat);
+        const markerGeo = new THREE.SphereGeometry(0.6, 12, 12);
+        const mat = new THREE.MeshBasicMaterial({
+          color, transparent: true, opacity: 0.9, depthTest: false
+        });
+        const m = new THREE.Mesh(markerGeo, mat);
         m.position.copy(v.multiplyScalar(this.SUN_DIST * 0.85));
         m.renderOrder = 1000;
         this.scene.add(m);
+
+        // Glow sprite behind the marker
+        const glowSprite = new THREE.Sprite(
+          new THREE.SpriteMaterial({
+            map: this._createGlowTexture(),
+            color,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            opacity: 0.6,
+          })
+        );
+        glowSprite.scale.setScalar(4);
+        glowSprite.position.copy(m.position);
+        glowSprite.renderOrder = 999;
+        this.scene.add(glowSprite);
+        m.userData.glowSprite = glowSprite;
+
         return m;
       };
       this._sunriseMarker = addMarker(sunrise, 0xff6600);
       this._sunsetMarker  = addMarker(sunset,  0xcc3300);
+
+      // ── Hour tick marks along the daylight arc ──
+      const tickGeo = new THREE.SphereGeometry(0.15, 6, 6);
+      const tickMat = new THREE.MeshBasicMaterial({
+        color: 0xffcc00, transparent: true, opacity: 0.5, depthTest: false
+      });
+      for (let h = Math.ceil(sunrise); h <= Math.floor(sunset); h++) {
+        const pos = SunSimulation.calculateSolarPosition(lat, lon, date, h);
+        if (pos.elevation <= 0) continue;
+        const v = SunSimulation.getSunVector(pos.elevation, pos.azimuth);
+        const tick = new THREE.Mesh(tickGeo, tickMat);
+        tick.position.copy(v.multiplyScalar(this.SUN_DIST * 0.85));
+        tick.renderOrder = 1001;
+        this.scene.add(tick);
+        this._hourMarkers.push(tick);
+      }
     }
   }
 

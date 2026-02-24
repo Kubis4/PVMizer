@@ -14,6 +14,7 @@ const translations = {
     'startup.project':      'Project Mode',
     'startup.projectDesc':  'Plan a real PV installation. Enter building dimensions and annual consumption — the app recommends panel count, calculates yearly energy production, savings, payback period and generates a full PDF report.',
     'startup.projectBtn':   'Set Up Project →',
+    'startup.loadProject':  'Load Saved Project',
     'startup.projectForm':  'Project Details',
     'startup.projName':            'Project Name',
     'startup.projNamePlaceholder': 'My Solar Project',
@@ -156,6 +157,8 @@ const translations = {
     'settings.exposure':    'Exposure',
     'settings.bloom':       'Bloom',
     'settings.fogDensity':  'Fog Density',
+    'settings.sunRays':     'Sun Rays',
+    'settings.rayIntensity':'Ray Intensity',
 
     // Loading
     'loading.text':         'Initializing Solar Simulation...',
@@ -164,9 +167,11 @@ const translations = {
     'btn.showControls':     'Show controls',
     'btn.showEnergy':       'Show energy output',
 
-    // PDF export
+    // PDF export & project save/load
     'btn.exportPdf':        'Export PDF Report',
     'btn.homeTooltip':      'Back to project selection',
+    'btn.saveProject':      'Save Project',
+    'btn.loadProject':      'Load Project',
     'label.clickToEdit':    'Click to edit project',
   },
 
@@ -180,6 +185,7 @@ const translations = {
     'startup.project':      'Projekt',
     'startup.projectDesc':  'Naplánujte skutočnú FV inštaláciu. Zadajte rozmery budovy a ročnú spotrebu — aplikácia odporučí počet panelov, vypočíta ročnú produkciu, úspory, dobu návratnosti a vygeneruje PDF správu.',
     'startup.projectBtn':   'Nastaviť projekt →',
+    'startup.loadProject':  'Načítať uložený projekt',
     'startup.projectForm':  'Podrobnosti projektu',
     'startup.projName':            'Názov projektu',
     'startup.projNamePlaceholder': 'Môj solárny projekt',
@@ -322,6 +328,8 @@ const translations = {
     'settings.exposure':    'Expozícia',
     'settings.bloom':       'Bloom',
     'settings.fogDensity':  'Hustota hmly',
+    'settings.sunRays':     'Slnečné lúče',
+    'settings.rayIntensity':'Intenzita lúčov',
 
     // Loading
     'loading.text':         'Inicializácia solárnej simulácie...',
@@ -330,9 +338,11 @@ const translations = {
     'btn.showControls':     'Zobraziť ovládanie',
     'btn.showEnergy':       'Zobraziť energiu',
 
-    // PDF export
+    // PDF export & project save/load
     'btn.exportPdf':        'Exportovať PDF report',
     'btn.homeTooltip':      'Späť na výber projektu',
+    'btn.saveProject':      'Uložiť projekt',
+    'btn.loadProject':      'Načítať projekt',
     'label.clickToEdit':    'Kliknúť pre úpravu projektu',
   }
 };

@@ -409,6 +409,61 @@ export class ObstacleManager {
   get obstacles() { return this._obstacles; }
   get selected()  { return this._selected; }
 
+  /** Serialize all obstacles to plain objects for project save */
+  serialize() {
+    return this._obstacles.map(obs => ({
+      type:        obs.type,
+      position:    { x: obs.position.x, y: obs.position.y, z: obs.position.z },
+      scale:       obs.scale,
+      rotationY:   obs.rotationY,
+      surfaceQuat: {
+        x: obs._surfaceQuat.x, y: obs._surfaceQuat.y,
+        z: obs._surfaceQuat.z, w: obs._surfaceQuat.w,
+      },
+    }));
+  }
+
+  /** Restore an obstacle from serialized data (project load) */
+  loadObstacle(data) {
+    const typeDef = OBSTACLE_TYPES[data.type];
+    if (!typeDef) return;
+
+    const group = this._buildModel(data.type, false);
+    const pos = new THREE.Vector3(data.position.x, data.position.y, data.position.z);
+    group.position.copy(pos);
+
+    // Restore surface alignment quaternion
+    const surfQ = new THREE.Quaternion(
+      data.surfaceQuat.x, data.surfaceQuat.y,
+      data.surfaceQuat.z, data.surfaceQuat.w
+    );
+
+    // Apply scale
+    const s = data.scale || 1.0;
+    group.scale.set(s, s, s);
+
+    // Apply rotation: surface alignment + Y spin
+    const spin = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0, (data.rotationY || 0) * Math.PI / 180, 0)
+    );
+    group.quaternion.copy(surfQ).multiply(spin);
+
+    this.scene.add(group);
+
+    const obs = {
+      id:            this._nextId++,
+      type:          data.type,
+      group,
+      position:      pos,
+      footprint:     typeDef.footprint * s,
+      shadingFactor: typeDef.shadingFactor,
+      scale:         s,
+      rotationY:     data.rotationY || 0,
+      _surfaceQuat:  surfQ,
+    };
+    this._obstacles.push(obs);
+  }
+
   // ─── 3D Model builders ───────────────────────────────────────────────────
   _buildModel(type, isPreview) {
     const group = new THREE.Group();

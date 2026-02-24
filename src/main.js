@@ -18,6 +18,7 @@ import { UIController }                    from './UIController.js';
 import { StartupScreen }                   from './StartupScreen.js';
 import { ProjectData }                     from './ProjectData.js';
 import { HelpModal }                       from './HelpModal.js';
+import { GodRaysEffect }                   from './GodRaysEffect.js';
 import { ObstacleManager, OBSTACLE_TYPES } from './ObstacleManager.js';
 import { PanelRecommender }               from './PanelRecommender.js';
 import { WeatherEffects }                from './WeatherEffects.js';
@@ -66,6 +67,8 @@ const state = {
   shadowsEnabled:  true,
   showSunPath:     true,
   showHeatmap:     false,
+  showGodRays:     true,
+  godRayIntensity: 0.10,
 
   // App mode
   appMode:         'sandbox',  // 'sandbox' | 'project'
@@ -140,12 +143,18 @@ const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight), 0.1, 0.6, 0.85
 );
 composer.addPass(bloomPass);
-composer.addPass(new OutputPass());
+// God rays pass inserted before final output
+let godRays = null;  // initialized after sunSim is created
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Subsystems
 // ─────────────────────────────────────────────────────────────────────────────
 const sunSim          = new SunSimulation(scene, renderer);
+// Finish composer chain now that sunSim exists
+godRays = new GodRaysEffect(renderer, scene, camera, sunSim.sunSphere);
+composer.addPass(godRays.shaderPass);
+composer.addPass(new OutputPass());
+
 const solarPanels     = new SolarPanels(scene);
 const obstacleManager = new ObstacleManager(scene);
 // Notify UI when an obstacle is selected/deselected
@@ -170,6 +179,10 @@ let peakPowerKw   = 0;
 const raycaster = new THREE.Raycaster();
 const _ndc      = new THREE.Vector2();
 
+// Raycaster for building self-shading (panels shadowed by own walls at low sun angles)
+const _buildingSelfRaycaster = new THREE.Raycaster();
+_buildingSelfRaycaster.far = 100;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // App object (shared with UIController)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -190,7 +203,7 @@ function setBuildingRotation(deg) {
 
 const app = {
   state, renderer, scene, camera, sunSim, solarPanels, groundMesh,
-  obstacleManager, weatherEffects, helpModal, startupScreen, bloomPass, composer,
+  obstacleManager, weatherEffects, helpModal, startupScreen, bloomPass, godRays, composer,
   setRoofType, rebuildRoof, rebuildPanels,
   onLocationChange, setPanelDimensions: applyPanelDimensions,
   updateProjectFinancials,
@@ -239,6 +252,149 @@ const app = {
       monthlyEnergy,
       dayCurve,
     };
+  },
+
+  async saveProject() {
+    // Collect active face orientations (survive roof rebuilds)
+    const activeFaceOrientations = [...state.activeFaces]
+      .map(i => roofFaces[i]?.orientation).filter(Boolean);
+
+    // Collect per-face config keyed by orientation name
+    const faceConfigByOrientation = {};
+    for (const [idx, conf] of Object.entries(state.faceConfig)) {
+      const orient = roofFaces[idx]?.orientation;
+      if (orient) faceConfigByOrientation[orient] = conf;
+    }
+
+    const data = {
+      version: 1,
+      appMode: state.appMode,
+
+      // Building
+      roofType: state.roofType, roofPitch: state.roofPitch,
+      ridgeLength: state.ridgeLength,
+      houseWidth: state.houseWidth, houseDepth: state.houseDepth,
+      wallHeight: state.wallHeight, buildingRotation: state.buildingRotation,
+
+      // Panels
+      panelNominalWp: state.panelNominalWp, panelGap: state.panelGap,
+      panelTilt: state.panelTilt, panelWidth: state.panelWidth,
+      panelHeight: state.panelHeight, panelTempCoeff: state.panelTempCoeff,
+      panelOrientation: state.panelOrientation, flatLayout: state.flatLayout,
+      fillStrategy: state.fillStrategy,
+
+      // Location & time
+      latitude: state.latitude, longitude: state.longitude,
+      date: state.date.toISOString(), timeHours: state.timeHours,
+      weatherCondition: state.weatherCondition,
+
+      // Faces
+      activeFaceOrientations,
+      faceConfigByOrientation,
+
+      // Project financial data
+      projectData: state.projectData ? {
+        name: state.projectData.name,
+        annualConsumption: state.projectData.annualConsumption,
+        tariff: state.projectData.tariff,
+        feedInTariff: state.projectData.feedInTariff,
+        lifetime: state.projectData.lifetime,
+        costPerKwp: state.projectData.costPerKwp,
+      } : null,
+
+      // Obstacles
+      obstacles: obstacleManager.serialize(),
+    };
+
+    const defaultName = state.projectData
+      ? `${state.projectData.name.replace(/[^a-zA-Z0-9 _-]/g, '')}.pvmz`
+      : 'project.pvmz';
+
+    const result = await window.electronAPI.saveProject(JSON.stringify(data, null, 2), defaultName);
+    return result;
+  },
+
+  async loadProject() {
+    const result = await window.electronAPI.openProject();
+    if (!result.success) return;
+
+    let data;
+    try { data = JSON.parse(result.data); }
+    catch { console.error('Invalid project file'); return; }
+
+    if (!data.version) { console.error('Missing project version'); return; }
+
+    // Restore state fields
+    state.roofType       = data.roofType       || 'flat';
+    state.roofPitch      = data.roofPitch      ?? 30;
+    state.ridgeLength    = data.ridgeLength     ?? 4;
+    state.houseWidth     = data.houseWidth      ?? 10;
+    state.houseDepth     = data.houseDepth      ?? 10;
+    state.wallHeight     = data.wallHeight      ?? 3;
+    state.buildingRotation = data.buildingRotation ?? 0;
+
+    state.panelNominalWp  = data.panelNominalWp  ?? 440;
+    state.panelGap        = data.panelGap         ?? 0.10;
+    state.panelTilt       = data.panelTilt        ?? 15;
+    state.panelWidth      = data.panelWidth       ?? 1.0;
+    state.panelHeight     = data.panelHeight      ?? 1.65;
+    state.panelTempCoeff  = data.panelTempCoeff   ?? 0.004;
+    state.panelOrientation = data.panelOrientation || 'portrait';
+    state.flatLayout      = data.flatLayout       || 'south';
+    state.fillStrategy    = data.fillStrategy     || 'bottom-up';
+
+    state.latitude  = data.latitude  ?? 48.3;
+    state.longitude = data.longitude ?? 18.1;
+    state.date      = data.date ? new Date(data.date) : new Date();
+    state.timeHours = data.timeHours ?? 10;
+
+    // Weather
+    state.weatherCondition  = data.weatherCondition || 'clear';
+    state.weatherMultiplier = WEATHER_MULTIPLIERS[state.weatherCondition] || 1.0;
+    weatherEffects.setCondition(state.weatherCondition);
+
+    // Project data
+    if (data.projectData) {
+      state.appMode = 'project';
+      state.projectData = new ProjectData(data.projectData);
+    } else {
+      state.appMode = data.appMode || 'sandbox';
+      state.projectData = null;
+    }
+
+    // Restore face selections by orientation name
+    if (data.activeFaceOrientations) {
+      state._savedOrientations = new Set(data.activeFaceOrientations);
+    }
+
+    // Restore per-face config by orientation name
+    state._savedFaceConfigs = data.faceConfigByOrientation || {};
+
+    // Obstacles
+    obstacleManager.deleteAll();
+    if (data.obstacles) {
+      for (const obsData of data.obstacles) obstacleManager.loadObstacle(obsData);
+    }
+
+    // Rebuild scene
+    setPanelDimensions(state.panelWidth, state.panelHeight);
+    setTempCoeff(state.panelTempCoeff);
+    rebuildRoof();
+    sunSim.updateTrajectory(state.latitude, state.longitude, state.date, state.showSunPath);
+    syncUIToState();
+
+    // Apply mode (shows/hides financial panel, project header, etc.)
+    if (!ui) {
+      ui = new UIController(app);
+      ui.init();
+    }
+    applyMode(state.appMode, data.projectData ? {
+      ...data.projectData,
+      lat: state.latitude, lon: state.longitude,
+      roofType: state.roofType, houseWidth: state.houseWidth,
+      houseDepth: state.houseDepth, wallHeight: state.wallHeight,
+      roofPitch: state.roofPitch,
+    } : null);
   },
 };
 
@@ -980,13 +1136,24 @@ function animate() {
   // Update heatmap colors every frame (cheap dot-product per face)
   if (_heatmapMeshes.length) updateHeatmapColors(sunVector);
 
-  // Update obstacle shading factors on panels (~every 500ms)
-  if (shadingThrottle > 500 && obstacleManager.obstacles.length > 0) {
+  // Update shading factors on panels (~every 500ms): obstacles + building self-shading
+  if (shadingThrottle > 500) {
     shadingThrottle = 0;
+    const hasObstacles = obstacleManager.obstacles.length > 0;
+    const _selfRaycaster = _buildingSelfRaycaster;
     for (const mesh of solarPanels.panels) {
       const panelPos = new THREE.Vector3();
       mesh.getWorldPosition(panelPos);
-      mesh.userData.shadingFactor = obstacleManager.getShadingFactor(panelPos, sunVector);
+      // Obstacle shading
+      let sf = hasObstacles ? obstacleManager.getShadingFactor(panelPos, sunVector) : 0;
+      // Building self-shading: raycast from panel toward sun, check if building blocks it
+      if (sf < 1 && sunVector.y > 0 && roofMeshes.length > 0) {
+        const origin = panelPos.clone().addScaledVector(sunVector, 0.3); // offset to avoid self-hit
+        _selfRaycaster.set(origin, sunVector);
+        const hits = _selfRaycaster.intersectObjects(roofMeshes, false);
+        if (hits.length > 0) sf = Math.max(sf, 0.95); // wall blocks nearly all direct beam
+      }
+      mesh.userData.shadingFactor = sf;
     }
   }
 
@@ -1023,6 +1190,7 @@ function animate() {
   }
 
   controls.update();
+  if (godRays) godRays.update(state.weatherCondition);
   composer.render();
 }
 
@@ -1041,6 +1209,10 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
   composer.setSize(w, h);
+  if (godRays) godRays.resize(w, h);
+  // Update Line2 materials which need screen resolution
+  if (sunSim.trajectoryLine?.material) sunSim.trajectoryLine.material.resolution.set(w, h);
+  if (sunSim._twilightLine?.material) sunSim._twilightLine.material.resolution.set(w, h);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1057,6 +1229,9 @@ async function init() {
   startupScreen.show();
   startupScreen.onModeSelected((mode, projectFormData) => {
     applyMode(mode, projectFormData);
+  });
+  startupScreen.onLoadProject(() => {
+    app.loadProject();
   });
 }
 

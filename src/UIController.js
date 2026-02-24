@@ -567,6 +567,16 @@ export class UIController {
       if (this.app.startupScreen) this.app.startupScreen.show();
     });
 
+    // Save project button (icon next to project name header)
+    document.getElementById('saveProjectBtn')?.addEventListener('click', async () => {
+      if (this.app.saveProject) await this.app.saveProject();
+    });
+
+    // Load project button (in sidebar header)
+    document.getElementById('loadProjectBtn')?.addEventListener('click', async () => {
+      if (this.app.loadProject) await this.app.loadProject();
+    });
+
     // PDF export button (icon next to project name header)
     document.getElementById('exportPdfBtn')?.addEventListener('click', async () => {
       const { exportProjectPDF } = await import('./PdfExport.js');
@@ -657,6 +667,18 @@ export class UIController {
       const v = parseFloat(e.target.value);
       document.getElementById('fogDensityVal').textContent = v.toFixed(3);
       if (this.app.scene.fog) this.app.scene.fog.density = v;
+    });
+    // God rays toggle
+    document.getElementById('showGodRays')?.addEventListener('change', e => {
+      this.app.state.showGodRays = e.target.checked;
+      if (this.app.godRays) this.app.godRays.enabled = e.target.checked;
+    });
+    // God ray intensity slider
+    document.getElementById('godRaySlider')?.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('godRayVal').textContent = v.toFixed(2);
+      this.app.state.godRayIntensity = v;
+      if (this.app.godRays) this.app.godRays.intensity = v;
     });
   }
 
