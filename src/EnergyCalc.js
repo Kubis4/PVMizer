@@ -126,8 +126,10 @@ export class EnergyCalc {
    */
   static calculateDayCurve(lat, lon, date, panelInfos, weatherMultiplier = 1.0) {
     const result = [];
+    const dstOffset = SunSimulation.getDSTOffset(date, lat, lon);
     for (let h = 0; h <= 24; h += 10 / 60) {
-      const pos  = SunSimulation.calculateSolarPosition(lat, lon, date, h);
+      const solarTimeH = h + dstOffset;  // Apply DST offset
+      const pos  = SunSimulation.calculateSolarPosition(lat, lon, date, solarTimeH);
       const ghi  = SunSimulation.getGHI(pos.elevation);
       const sunV = SunSimulation.getSunVector(pos.elevation, pos.azimuth);
       let watts = 0;

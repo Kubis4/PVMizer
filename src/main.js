@@ -717,12 +717,13 @@ function onLocationChange() {
   sunSim.updateTrajectory(state.latitude, state.longitude, state.date, state.showSunPath);
 
   // Flip camera when hemisphere changes so panels are visible.
-  // Geometry uses +Z=North. NH panels face south (−Z side) → camera at −Z.
-  // SH panels face north (+Z side) → camera at +Z.
-  const wantNegativeZ = state.latitude >= 0; // NH: camera should be south (−Z)
+  // Geometry uses +Z=North. NH panels face south (−Z side) → camera at +Z.
+  // SH panels face north (+Z side) → camera at -Z.
+  const wantPositiveZ = state.latitude >= 0; // NH: camera should be at +Z (south side)
   const camZ = camera.position.z;
-  if ((wantNegativeZ && camZ > 0) || (!wantNegativeZ && camZ < 0)) {
+  if ((wantPositiveZ && camZ < 0) || (!wantPositiveZ && camZ > 0)) {
     camera.position.z = -camZ;
+    controls.target.z = -controls.target.z;
     controls.update();
   }
 
@@ -828,6 +829,7 @@ function syncUIToState() {
 // ─────────────────────────────────────────────────────────────────────────────
 function createCompassLabels() {
   // +X=East, +Y=Up, +Z=South — camera is on north (-Z) side looking south (+Z)
+  // Compass stays in fixed world positions
   const dirs = [
     { letter: 'S', color: '#f59e0b', pos: new THREE.Vector3(0,    0.6, -20) },
     { letter: 'N', color: '#60a5fa', pos: new THREE.Vector3(0,    0.6,  20) },
@@ -1158,8 +1160,10 @@ function animate() {
     if (valEl)  valEl.textContent = fmtTime(state.timeHours);
   }
 
-  // Update sun (with weather condition)
-  sunSim.update(state.latitude, state.longitude, state.date, state.timeHours, state.shadowsEnabled, state.weatherCondition);
+  // Update sun (with weather condition and DST adjustment)
+  const dstOffset = SunSimulation.getDSTOffset(state.date, state.latitude, state.longitude);
+  const solarTimeHours = state.timeHours + dstOffset;
+  sunSim.update(state.latitude, state.longitude, state.date, solarTimeHours, state.shadowsEnabled, state.weatherCondition);
 
   // Weather fog density
   const fogDensityMap = { clear: 0.002, partly_cloudy: 0.003, cloudy: 0.005, rainy: 0.008, snowy: 0.010 };

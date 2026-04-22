@@ -1,7 +1,7 @@
 /**
  * SunSimulation.js
  * Solar position algorithm based on NOAA / Spencer (1971) & Iqbal (1983)
- * Coordinate system: +X=East, +Y=Up, +Z=South (camera on north side at -Z, looking toward +Z south)
+ * Coordinate system: +X=East, +Y=Up, +Z=North (consistent with geometry)
  */
 
 import * as THREE from 'three';
@@ -77,6 +77,92 @@ export class SunSimulation {
     this.SUN_DIST = 150;
   }
 
+  // ───────── DST (Daylight Saving Time) Rules ─────────
+  /**
+   * DST rules for different regions.
+   * Europe: Last Sunday of March (start) → Last Sunday of October (end), +1 hour
+   * USA: 2nd Sunday of March (start) → 1st Sunday of November (end), +1 hour
+   */
+  static DST_RULES = {
+    'europe': {
+      startMonth: 3,  endMonth: 10,
+      startWeek: 'last', endWeek: 'last',
+      offset: 1
+    },
+    'usa': {
+      startMonth: 3,  endMonth: 11,
+      startWeek: 'second', endWeek: 'first',
+      offset: 1
+    },
+    'none': {
+      offset: 0
+    }
+  };
+
+  /** Detect region based on coordinates */
+  static getRegionForDST(lat, lon) {
+    if (-10 <= lon && lon <= 40 && 35 <= lat && lat <= 70) return 'europe';
+    if (-125 <= lon && lon <= -65 && 25 <= lat && lat <= 50) return 'usa';
+    return 'none';
+  }
+
+  /** Find nth Sunday of a given month and year */
+  static findSunday(year, month, position) {
+    // position: 'first', 'second', or 'last'
+    const d = new Date(year, month - 1, 1);
+    
+    if (position === 'first') {
+      // Find first Sunday
+      while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
+      return new Date(d);
+    } else if (position === 'second') {
+      // Find second Sunday
+      while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
+      d.setDate(d.getDate() + 7);
+      return new Date(d);
+    } else if (position === 'last') {
+      // Find last Sunday
+      const daysInMonth = new Date(year, month, 0).getDate();
+      d.setDate(daysInMonth);
+      while (d.getDay() !== 0) d.setDate(d.getDate() - 1);
+      return new Date(d);
+    }
+    return null;
+  }
+
+  /** Check if DST is active on given date */
+  static isDSTActive(date, lat, lon) {
+    const region = SunSimulation.getRegionForDST(lat, lon);
+    const rules = SunSimulation.DST_RULES[region];
+    
+    if (!rules || rules.offset === 0) return false;
+    
+    const year = date.getFullYear();
+    const dstStart = SunSimulation.findSunday(year, rules.startMonth, rules.startWeek);
+    const dstEnd = SunSimulation.findSunday(year, rules.endMonth, rules.endWeek);
+    
+    // Compare date values as numbers: YYYYMMDD format
+    // This avoids timezone and UTC conversion issues
+    const y = date.getFullYear();
+    const m = date.getMonth();
+    const d = date.getDate();
+    const dateNum = y * 10000 + m * 100 + d;
+    const startNum = dstStart.getFullYear() * 10000 + dstStart.getMonth() * 100 + dstStart.getDate();
+    const endNum = dstEnd.getFullYear() * 10000 + dstEnd.getMonth() * 100 + dstEnd.getDate();
+    
+    // DST is active from start date (inclusive) until end date (exclusive)
+    return dateNum >= startNum && dateNum < endNum;
+  }
+
+  /** Get DST offset in hours for given date and location */
+  static getDSTOffset(date, lat, lon) {
+    if (SunSimulation.isDSTActive(date, lat, lon)) {
+      const rules = SunSimulation.DST_RULES[SunSimulation.getRegionForDST(lat, lon)];
+      return rules ? rules.offset : 0;
+    }
+    return 0;
+  }
+
   // ───────── Solar Position ─────────
   /**
    * Calculate solar position.
@@ -90,15 +176,17 @@ export class SunSimulation {
     const latRad = lat * DEG;
     const dayOfYear = SunSimulation.getDayOfYear(date);
 
+    // Apply DST correction: convert local clock time to solar time
+    // timeHours is expected to be "wall clock" time (already including DST)
+    // So we don't adjust it, but we note it for reference
+    const dstOffset = SunSimulation.getDSTOffset(date, lat, lon);
+
     // Equation of time (minutes) — Spencer formula
     const B = (360 / 365 * (dayOfYear - 81)) * DEG;
     const EoT = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
 
-    // Using LOCAL CLOCK TIME (UTC + longitude/15 offset, typical timezone)
-    // TC converts local clock time → local apparent solar time
-    // LSTM = 15 * round(lon/15) ≈ lon, so longitude terms mostly cancel.
-    // TC = 4*(lon - LSTM)/60 + EoT/60 ≈ EoT/60 for most locations.
-    // This ensures 12:00 on the slider = close to solar noon everywhere.
+    // Using LOCAL CLOCK TIME (includes DST offset if applicable)
+    // TC converts local clock time → local solar time
     const TC = EoT / 60; // hours; equates timeHours to local solar time
     const solarTime = timeHours + TC;
 
@@ -114,19 +202,18 @@ export class SunSimulation {
                     Math.cos(latRad) * Math.cos(declination) * Math.cos(hourAngle);
     const elevation = Math.asin(Math.max(-1, Math.min(1, sinElev)));
 
-    // Solar azimuth (measured from South toward West, then adjusted)
+    // Solar azimuth (measured from North, clockwise: 0=N, 90=E, 180=S, 270=W)
+    // Use atan2 for correct quadrant handling in all hemispheres
     let azimuth = 0;
     const cosElev = Math.cos(elevation);
     if (Math.abs(cosElev) > 1e-6) {
-      const cosAz = (Math.sin(elevation) * Math.sin(latRad) - Math.sin(declination)) /
-                    (cosElev * Math.cos(latRad));
-      azimuth = Math.acos(Math.max(-1, Math.min(1, cosAz)));
-      // Southern hemisphere: sun transits via the north, so reflect the azimuth
-      // across the east-west axis before applying the morning/afternoon flip.
-      if (lat < 0) azimuth = Math.PI - azimuth;
-      // Azimuth from North, measured clockwise
-      // In the morning (hourAngle < 0) sun is east; afternoon (hourAngle > 0) sun is west
-      if (hourAngle > 0) azimuth = 2 * Math.PI - azimuth;
+      // Azimuth components using spherical trigonometry
+      const sinAz = Math.cos(declination) * Math.sin(hourAngle) / cosElev;
+      const cosAz = (Math.sin(declination) * Math.cos(latRad) - 
+                     Math.cos(declination) * Math.sin(latRad) * Math.cos(hourAngle)) / cosElev;
+      // atan2 returns [-π, π], convert to [0, 2π]
+      azimuth = Math.atan2(sinAz, cosAz);
+      if (azimuth < 0) azimuth += 2 * Math.PI;
     }
 
     return {
@@ -144,18 +231,18 @@ export class SunSimulation {
   }
 
   /** Convert solar pos to Three.js direction vector (sun→scene).
-   *  Coordinate: +X=East, +Y=Up, +Z=South
+   *  Coordinate: +X=East, +Y=Up, +Z=North
    *  azimuth: 0=North, 90=East, 180=South, 270=West (clockwise)
    */
   static getSunVector(elevDeg, azDeg) {
     const el = elevDeg * DEG;
     const az = azDeg  * DEG;
-    // Coordinate system: +X=East, +Y=Up, +Z=South (camera on north side looking south)
-    // az=0 → North (-Z), az=90 → East (+X), az=180 → South (+Z), az=270 → West (-X)
+    // Coordinate system: +X=East, +Y=Up, +Z=North (geometry convention)
+    // az=0 → North (+Z), az=90 → East (+X), az=180 → South (-Z), az=270 → West (-X)
     return new THREE.Vector3(
        Math.sin(az) * Math.cos(el),   // East (+X)
        Math.sin(el),                   // Up  (+Y)
-      -Math.cos(az) * Math.cos(el)    // South (+Z): -cos(0)=-1→N(-Z), -cos(180)=+1→S(+Z)
+       Math.cos(az) * Math.cos(el)    // North (+Z): cos(0)=+1→N(+Z), cos(180)=-1→S(-Z)
     ).normalize();
   }
 
@@ -170,16 +257,30 @@ export class SunSimulation {
 
   /**
    * Diffuse Horizontal Irradiance (clear sky).
-   * Approximate as ~12% of extraterrestrial horizontal irradiance.
+   * Uses Reindl model: DHI = Kd * GHI_beam, where Kd depends on clearness index.
+   * More accurate than simple 12% model: captures clear vs cloudy sky variations.
    */
   static getDHI(elevationDeg) {
     if (elevationDeg <= 0) return 0;
     const sinEl = Math.sin(elevationDeg * DEG);
-    // Simplified: DHI ≈ 0.12 * I0 * sin(el) provides plausible diffuse sky radiation
-    return SOLAR_CONSTANT * 0.12 * sinEl;
+    const GHI_beam = SunSimulation.getDNI(elevationDeg) * sinEl;
+    
+    // Clear-sky DHI (simple model for reference)
+    const DHI_clearSky = SOLAR_CONSTANT * 0.12 * sinEl;
+    
+    // Clear-sky GHI
+    const GHI_clearSky = GHI_beam + DHI_clearSky;
+    
+    // Reindl diffuse fraction model (±8% accuracy)
+    // Kc = clearness index, Kd = diffuse fraction
+    const Kc = GHI_clearSky > 0 ? GHI_beam / GHI_clearSky : 0;
+    const Kd = 1.020 - 0.254 * Kc + 0.0123 * sinEl;
+    
+    // Reindl DHI
+    return Math.max(0, Kd * GHI_beam);
   }
 
-  /** Global Horizontal Irradiance = DNI*sin(el) + DHI */
+  /** Global Horizontal Irradiance = DNI*sin(el) + DHI (Reindl) */
   static getGHI(elevationDeg) {
     if (elevationDeg <= 0) return 0;
     const sinEl = Math.sin(elevationDeg * DEG);
@@ -210,6 +311,8 @@ export class SunSimulation {
   update(lat, lon, date, timeHours, shadowsEnabled, weatherCondition = 'clear') {
     const pos = SunSimulation.calculateSolarPosition(lat, lon, date, timeHours);
     this.sunPosition = pos;
+    
+    // Azimuth je absolútny bez ohľadu na hemisferu
     this.sunVector = SunSimulation.getSunVector(pos.elevation, pos.azimuth);
     this.irradiance = SunSimulation.getGHI(pos.elevation);
 
@@ -304,6 +407,7 @@ export class SunSimulation {
 
     for (let h = 0; h <= 24; h += 0.1) {
       const pos = SunSimulation.calculateSolarPosition(lat, lon, date, h);
+      // Azimuth je absolútny bez ohľadu na hemisferu
       const v = SunSimulation.getSunVector(Math.max(pos.elevation, -6), pos.azimuth);
       const pt = v.clone().multiplyScalar(this.SUN_DIST * 0.85);
       if (pos.elevation > 0) {

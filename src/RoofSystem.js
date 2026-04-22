@@ -24,54 +24,211 @@ function _makeWallTex() {
   const W = 512, H = 512, cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const cx = cv.getContext('2d');
-  cx.fillStyle = '#eee8d8'; cx.fillRect(0, 0, W, H);
-  for (let i = 0; i < 9000; i++) {
-    cx.fillStyle = `rgba(100,75,45,${Math.random() * 0.07})`;
-    cx.beginPath(); cx.arc(Math.random() * W, Math.random() * H, Math.random() * 1.8, 0, 6.28); cx.fill();
+  
+  // Moderná omietka s prírodným vzhľadom
+  // Základný tón: svetlá piesková/béžová farba
+  cx.fillStyle = '#d9cfc5'; cx.fillRect(0, 0, W, H);
+  
+  // Perlin-like šum pre prírodný vzhľad
+  const imageData = cx.getImageData(0, 0, W, H);
+  const data = imageData.data;
+  
+  // Vrstvy textúry pre hĺbku
+  for (let i = 0; i < W * H; i++) {
+    const offset = i * 4;
+    // Podkladový šum
+    const noise1 = Math.sin(i * 0.01) * Math.cos(i * 0.007) * 20;
+    // Jemnejší šum
+    const noise2 = Math.random() * 30 - 15;
+    const totalNoise = noise1 + noise2;
+    
+    data[offset] += totalNoise;      // R
+    data[offset + 1] += totalNoise * 0.95; // G
+    data[offset + 2] += totalNoise * 0.9;  // B
   }
+  cx.putImageData(imageData, 0, 0);
+  
+  // Väčšie nečistoty a textúra povrchu
+  for (let i = 0; i < 2000; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const size = Math.random() * 8 + 2;
+    const opacity = Math.random() * 0.15;
+    cx.fillStyle = `rgba(${150 + Math.random() * 50}, ${140 + Math.random() * 40}, ${130 + Math.random() * 30}, ${opacity})`;
+    cx.beginPath();
+    cx.arc(x, y, size, 0, 6.28);
+    cx.fill();
+  }
+  
+  // Jemné praskliny a línie od vody
+  for (let i = 0; i < 300; i++) {
+    const x1 = Math.random() * W;
+    const y1 = Math.random() * H;
+    const x2 = x1 + (Math.random() - 0.5) * 30;
+    const y2 = y1 + (Math.random() - 0.5) * 30;
+    cx.strokeStyle = `rgba(100, 80, 60, ${Math.random() * 0.1})`;
+    cx.lineWidth = 0.5 + Math.random() * 1;
+    cx.beginPath();
+    cx.moveTo(x1, y1);
+    cx.lineTo(x2, y2);
+    cx.stroke();
+  }
+  
+  // Spodná časť: tmavší kameň/betón
+  const stoneGrad = cx.createLinearGradient(0, H * 0.6, 0, H);
+  stoneGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  stoneGrad.addColorStop(0.3, 'rgba(80, 70, 60, 0.2)');
+  stoneGrad.addColorStop(1, 'rgba(60, 50, 40, 0.35)');
+  cx.fillStyle = stoneGrad;
+  cx.fillRect(0, H * 0.6, W, H * 0.4);
+  
+  // Prírodný kameň efekt v dolnej časti
+  for (let i = 0; i < 1500; i++) {
+    const x = Math.random() * W;
+    const y = H * 0.6 + Math.random() * (H * 0.4);
+    const size = Math.random() * 3;
+    cx.fillStyle = `rgba(${80 + Math.random() * 40}, ${60 + Math.random() * 30}, ${40 + Math.random() * 20}, ${Math.random() * 0.2})`;
+    cx.beginPath();
+    cx.arc(x, y, size, 0, 6.28);
+    cx.fill();
+  }
+  
+  // Patina a vlhkosť v spodnej časti (ako v starom kovu)
+  for (let i = 0; i < 800; i++) {
+    const x = Math.random() * W;
+    const y = H * 0.65 + Math.random() * (H * 0.35);
+    const size = 1 + Math.random() * 2.5;
+    const hue = 30 + Math.random() * 20; // Okrovo/zeleno
+    cx.fillStyle = `hsla(${hue}, 60%, 40%, ${Math.random() * 0.15})`;
+    cx.beginPath();
+    cx.arc(x, y, size, 0, 6.28);
+    cx.fill();
+  }
+  
+  // Zvislé línie od zrážok
+  for (let i = 0; i < 150; i++) {
+    const x = Math.random() * W;
+    const startY = Math.random() * H * 0.6;
+    const len = 50 + Math.random() * 100;
+    cx.strokeStyle = `rgba(0, 0, 0, ${Math.random() * 0.08})`;
+    cx.lineWidth = 0.5 + Math.random() * 0.8;
+    cx.beginPath();
+    cx.moveTo(x, startY);
+    cx.lineTo(x + (Math.random() - 0.5) * 3, startY + len);
+    cx.stroke();
+  }
+  
   const t = new THREE.CanvasTexture(cv);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 2); return t;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2, 1.5);
+  return t;
 }
 
 function _makeRoofTileTex() {
-  const W = 512, H = 512, cv = document.createElement('canvas');
+  const W = 256, H = 256, cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const cx = cv.getContext('2d');
-  const tw = 64, th = 40, nc = Math.ceil(W / tw) + 1, nr = Math.ceil(H / th) + 1;
-  cx.fillStyle = '#7a3a1a'; cx.fillRect(0, 0, W, H);
-  for (let r = 0; r < nr; r++) {
-    for (let c = 0; c < nc; c++) {
-      const xo = (r % 2) * (tw / 2), x = c * tw - xo, y = r * th;
-      const g = cx.createLinearGradient(x, y, x + tw, y + th);
-      g.addColorStop(0, '#c8652a'); g.addColorStop(0.5, '#a04a1e'); g.addColorStop(1, '#7a3a14');
-      cx.fillStyle = g; cx.fillRect(x + 1, y + 1, tw - 2, th - 4);
-      cx.fillStyle = 'rgba(0,0,0,0.22)'; cx.fillRect(x + 1, y + th - 5, tw - 2, 4);
-      cx.fillStyle = 'rgba(255,255,255,0.07)'; cx.fillRect(x + 1, y + 1, tw - 2, 4);
+
+  // Základná červená farba strechy
+  cx.fillStyle = '#8b3a2a'; cx.fillRect(0, 0, W, H);
+
+  // Jednoduché obdĺžnikové tašky - iba fillRect, žiadne krivky
+  const tileW = 32, tileH = 16;
+  const cols = Math.ceil(W / tileW) + 1;
+  const rows = Math.ceil(H / tileH) + 1;
+  const reds = ['#7a3325', '#8b3a2a', '#943f2e', '#7f3528', '#873830', '#923d2c'];
+
+  for (let r = 0; r < rows; r++) {
+    const offX = (r % 2) * (tileW / 2);
+    for (let c = 0; c < cols; c++) {
+      const x = c * tileW - offX;
+      const y = r * tileH;
+
+      // Náhodný červený odtieň pre každú tašku
+      cx.fillStyle = reds[(r * 7 + c * 3) % reds.length];
+      cx.fillRect(x + 1, y + 1, tileW - 2, tileH - 2);
+
+      // Svetlejší horný okraj (1px)
+      cx.fillStyle = 'rgba(180,100,80,0.3)';
+      cx.fillRect(x + 1, y + 1, tileW - 2, 2);
+
+      // Tmavší spodný okraj (tieň, 1px)
+      cx.fillStyle = 'rgba(0,0,0,0.25)';
+      cx.fillRect(x + 1, y + tileH - 3, tileW - 2, 2);
     }
   }
-  cx.strokeStyle = '#5a2a0e'; cx.lineWidth = 1.5;
-  for (let r = 0; r <= nr; r++) { cx.beginPath(); cx.moveTo(0, r * th); cx.lineTo(W, r * th); cx.stroke(); }
+
   const t = new THREE.CanvasTexture(cv);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 4); return t;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(4, 5);
+  return t;
 }
 
 function _makeFlatRoofTex() {
   const W = 512, H = 512, cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const cx = cv.getContext('2d');
-  cx.fillStyle = '#565656'; cx.fillRect(0, 0, W, H);
-  for (let i = 0; i < 2800; i++) {
-    const gv = Math.floor(55 + Math.random() * 90);
-    cx.fillStyle = `rgb(${gv},${gv},${gv})`;
-    cx.beginPath(); cx.arc(Math.random() * W, Math.random() * H, 1 + Math.random() * 2.5, 0, 6.28); cx.fill();
+  // Realistický asfalt/bitúmen
+  // Základný tón s variáciou
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const v = 35 + Math.random() * 35;
+      cx.fillStyle = `rgb(${Math.floor(v * 0.7)}, ${Math.floor(v * 0.65)}, ${Math.floor(v * 0.6)})`;
+      cx.fillRect(x, y, 1, 1);
+    }
   }
-  cx.strokeStyle = 'rgba(25,25,25,0.5)'; cx.lineWidth = 2;
-  for (let i = 1; i < 4; i++) {
-    cx.beginPath(); cx.moveTo(0, i * H / 4); cx.lineTo(W, i * H / 4); cx.stroke();
-    cx.beginPath(); cx.moveTo(i * W / 4, 0); cx.lineTo(i * W / 4, H); cx.stroke();
+  // Väčšie agregáty a štruktúra
+  for (let i = 0; i < 5000; i++) {
+    const x = Math.random() * W, y = Math.random() * H;
+    const size = Math.random() * 3.5;
+    const v = 30 + Math.random() * 40;
+    cx.fillStyle = `rgba(${Math.floor(v)}, ${Math.floor(v * 0.9)}, ${Math.floor(v * 0.85)}, ${0.6 + Math.random() * 0.4})`;
+    cx.beginPath();
+    cx.arc(x, y, size, 0, 6.28);
+    cx.fill();
   }
+  // Mikro prasklinky a štruktúra asfaltového povrchu
+  cx.strokeStyle = 'rgba(20,20,20,0.4)';
+  cx.lineWidth = 0.5;
+  for (let i = 0; i < 1500; i++) {
+    const x1 = Math.random() * W, y1 = Math.random() * H;
+    const x2 = x1 + (Math.random() - 0.5) * 20, y2 = y1 + (Math.random() - 0.5) * 20;
+    cx.beginPath();
+    cx.moveTo(x1, y1);
+    cx.lineTo(x2, y2);
+    cx.stroke();
+  }
+  // Vlhkosť a znečistenie
+  for (let i = 0; i < 3000; i++) {
+    const x = Math.random() * W, y = Math.random() * H;
+    const v = Math.random() * 50;
+    cx.fillStyle = `rgba(${Math.floor(v)}, ${Math.floor(v * 0.95)}, ${Math.floor(v * 0.9)}, ${Math.random() * 0.25})`;
+    cx.beginPath();
+    cx.arc(x, y, 0.8 + Math.random() * 2, 0, 6.28);
+    cx.fill();
+  }
+  // Väčšie praskliny a staré ryhy
+  for (let i = 0; i < 120; i++) {
+    const x1 = Math.random() * W, y1 = Math.random() * H;
+    const len = 30 + Math.random() * 80;
+    const ang = Math.random() * Math.PI * 2;
+    const x2 = x1 + Math.cos(ang) * len;
+    const y2 = y1 + Math.sin(ang) * len;
+    cx.strokeStyle = `rgba(10,10,10,${0.15 + Math.random() * 0.25})`;
+    cx.lineWidth = 1 + Math.random() * 1.5;
+    cx.beginPath();
+    cx.moveTo(x1, y1);
+    cx.lineTo(x2, y2);
+    cx.stroke();
+  }
+  // Vlhkosť v rohoch a spodnej časti
+  const waterGrad = cx.createRadialGradient(W * 0.2, H * 0.2, 10, W * 0.5, H * 0.5, 400);
+  waterGrad.addColorStop(0, 'rgba(80,100,120,0.15)');
+  waterGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  cx.fillStyle = waterGrad;
+  cx.fillRect(0, 0, W, H);
   const t = new THREE.CanvasTexture(cv);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 5); return t;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6, 6); return t;
 }
 
 export function makeGroundTexture() {
@@ -94,13 +251,13 @@ export function makeGroundTexture() {
 let _wallTex = null, _roofTileTex = null, _flatRoofTex = null;
 
 const wallMat = new THREE.MeshStandardMaterial({
-  color: 0xffffff, roughness: 0.88, metalness: 0.0, side: THREE.FrontSide
+  color: 0xffffff, roughness: 0.85, metalness: 0.0, side: THREE.FrontSide
 });
 const roofMat = new THREE.MeshStandardMaterial({
-  color: 0xffffff, roughness: 0.92, metalness: 0.0, side: THREE.DoubleSide
+  color: 0xffffff, roughness: 0.88, metalness: 0.02, side: THREE.DoubleSide
 });
 const flatRoofMat = new THREE.MeshStandardMaterial({
-  color: 0xffffff, roughness: 0.96, metalness: 0.0
+  color: 0xffffff, roughness: 0.94, metalness: 0.0
 });
 
 function _ensureTextures() {

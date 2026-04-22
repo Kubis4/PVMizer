@@ -62,7 +62,7 @@
     "win": {
       "target": [
         {
-          "target": "dir",
+          "target": "portable",
           "arch": [
             "x64"
           ]
