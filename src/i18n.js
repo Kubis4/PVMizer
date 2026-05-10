@@ -91,6 +91,14 @@ const translations = {
     'label.placed':         'Placed',
     'label.remaining':      'Remaining',
     'label.face':           'Face',
+    'dir.south':            'South',
+    'dir.north':            'North',
+    'dir.east':             'East',
+    'dir.west':             'West',
+    'dir.s':                'S',
+    'dir.n':                'N',
+    'dir.e':                'E',
+    'dir.w':                'W',
     'btn.reset':            'Reset',
     'section.location':     'Location',
     'label.advanced':       '📍 Advanced ▼',
@@ -163,13 +171,14 @@ const translations = {
     'settings.scene':       'Scene',
     'settings.shadows':     'Shadows',
     'settings.sunTrajectory':'Sun Trajectory',
-    'settings.showCompass': 'Show Compass',
-    'settings.rendering':   'Rendering',
-    'settings.exposure':    'Exposure',
-    'settings.bloom':       'Bloom',
-    'settings.fogDensity':  'Fog Density',
-    'settings.sunRays':     'Sun Rays',
-    'settings.rayIntensity':'Sun Rays Intensity',
+    'settings.showCompass':    'Show Compass',
+    'settings.panelBoundary':  'Panel Boundary',
+    'settings.rendering':      'Rendering',
+    'settings.exposure':       'Exposure',
+    'settings.bloom':          'Bloom',
+    'settings.fogDensity':     'Fog Density',
+    'settings.sunRays':        'Sun Rays',
+    'settings.rayIntensity':   'Sun Rays Intensity',
 
     // Loading
     'loading.text':         'Initializing Solar Simulation...',
@@ -273,6 +282,14 @@ const translations = {
     'label.placed':         'Umiestnené',
     'label.remaining':      'Zostatok',
     'label.face':           'Plocha',
+    'dir.south':            'Juh',
+    'dir.north':            'Sever',
+    'dir.east':             'Východ',
+    'dir.west':             'Západ',
+    'dir.s':                'J',
+    'dir.n':                'S',
+    'dir.e':                'V',
+    'dir.w':                'Z',
     'btn.reset':            'Resetovať',
     'section.location':     'Poloha',
     'label.advanced':       '📍 Pokročilé ▼',
@@ -345,8 +362,9 @@ const translations = {
     'settings.scene':       'Scéna',
     'settings.shadows':     'Tiene',
     'settings.sunTrajectory':'Trajektória slnka',
-    'settings.showCompass': 'Zobraziť kompas',
-    'settings.rendering':   'Vykresľovanie',
+    'settings.showCompass':   'Zobraziť kompas',
+    'settings.panelBoundary': 'Hranica panelov',
+    'settings.rendering':     'Vykresľovanie',
     'settings.exposure':    'Expozícia',
     'settings.bloom':       'Nasvietenie',
     'settings.fogDensity':  'Hustota hmly',
@@ -370,6 +388,8 @@ const translations = {
 };
 
 let currentLang = 'en';
+const _langListeners = [];
+export function onLanguageChange(fn) { _langListeners.push(fn); }
 
 export function t(key) {
   return (translations[currentLang] && translations[currentLang][key]) ||
@@ -394,6 +414,7 @@ export function setLanguage(lang) {
   document.querySelectorAll('[data-i18n-html]').forEach(el => {
     el.innerHTML = t(el.getAttribute('data-i18n-html'));
   });
+  _langListeners.forEach(fn => fn(lang));
 }
 
 export function getLanguage() {

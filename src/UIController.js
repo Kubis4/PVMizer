@@ -712,6 +712,10 @@ export class UIController {
         if (obj.name && obj.name.startsWith('compass_')) obj.visible = visible;
       });
     });
+    document.getElementById('showPanelBoundary')?.addEventListener('change', e => {
+      this.app.state.showPanelBoundary = e.target.checked;
+      for (const line of this.app.boundaryLines) line.visible = e.target.checked;
+    });
 
     // ── Settings modal sliders ──────────────────────────────────────────────
     document.getElementById('exposureSlider')?.addEventListener('input', e => {

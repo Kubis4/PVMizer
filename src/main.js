@@ -22,7 +22,7 @@ import { GodRaysEffect }                   from './GodRaysEffect.js';
 import { ObstacleManager, OBSTACLE_TYPES } from './ObstacleManager.js';
 import { PanelRecommender }               from './PanelRecommender.js';
 import { WeatherEffects }                from './WeatherEffects.js';
-import { setLanguage }                   from './i18n.js';
+import { setLanguage, t, onLanguageChange } from './i18n.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Application state
@@ -67,9 +67,10 @@ const state = {
   // Visual
   shadowsEnabled:  true,
   showSunPath:     true,
-  showHeatmap:     false,
-  showGodRays:     true,
-  godRayIntensity: 0.10,
+  showHeatmap:        false,
+  showGodRays:        true,
+  godRayIntensity:    0.10,
+  showPanelBoundary:  true,
 
   // App mode
   appMode:         'sandbox',  // 'sandbox' | 'project'
@@ -128,7 +129,7 @@ const scene = new THREE.Scene();
 scene.fog   = new THREE.FogExp2(0x87ceeb, 0.002);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
-camera.position.set(18, 14, 18);   // south side (+Z), looking toward north (-Z)
+camera.position.set(18, 14, -22);  // south-east side (−Z = south), looking at south-facing panels
 camera.lookAt(0, 3, 0);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -208,7 +209,8 @@ function setBuildingRotation(deg) {
 const app = {
   state, renderer, scene, camera, sunSim, solarPanels, groundMesh,
   obstacleManager, weatherEffects, helpModal, startupScreen, bloomPass, godRays, composer,
-  setRoofType, rebuildRoof, rebuildPanels,
+  setRoofType, rebuildRoof, rebuildPanels, buildPanelBoundaries,
+  get boundaryLines() { return _boundaryLines; },
   onLocationChange, setPanelDimensions: applyPanelDimensions,
   updateProjectFinancials,
   setBuildingRotation,
@@ -643,6 +645,7 @@ function rebuildPanels() {
   }
 
   if (state.appMode === 'project') updateProjectFinancials();
+  buildPanelBoundaries();
 }
 
 function applyPanelDimensions() {
@@ -716,10 +719,10 @@ function updateFaceLabels() {
 function onLocationChange() {
   sunSim.updateTrajectory(state.latitude, state.longitude, state.date, state.showSunPath);
 
-  // Flip camera when hemisphere changes so panels are visible.
-  // Geometry uses +Z=North. NH panels face south (−Z side) → camera at +Z.
-  // SH panels face north (+Z side) → camera at -Z.
-  const wantPositiveZ = state.latitude >= 0; // NH: camera should be at +Z (south side)
+  // Flip camera when hemisphere changes so south/north-facing panels stay visible.
+  // +Z = North, -Z = South. NH panels face south → camera at -Z (south side).
+  // SH panels face north → camera at +Z (north side).
+  const wantPositiveZ = state.latitude < 0; // SH: camera on north side (+Z)
   const camZ = camera.position.z;
   if ((wantPositiveZ && camZ < 0) || (!wantPositiveZ && camZ > 0)) {
     camera.position.z = -camZ;
@@ -827,46 +830,225 @@ function syncUIToState() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Compass N / S / E / W labels
 // ─────────────────────────────────────────────────────────────────────────────
+const _compassEntries = [
+  { key: 's', color: '#f59e0b', pos: new THREE.Vector3(0,    0.6, -20) },
+  { key: 'n', color: '#60a5fa', pos: new THREE.Vector3(0,    0.6,  20) },
+  { key: 'e', color: '#4ade80', pos: new THREE.Vector3(-20,  0.6,   0) },
+  { key: 'w', color: '#e879f9', pos: new THREE.Vector3( 20,  0.6,   0) },
+];
+
+function _drawCompassSprite(entry) {
+  const W = 128, H = 128;
+  const cv = entry.canvas || document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  entry.canvas = cv;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.beginPath(); ctx.arc(W / 2, H / 2, 52, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+  ctx.strokeStyle = entry.color; ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = entry.color;
+  ctx.font = 'bold 64px Segoe UI, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t(`dir.${entry.key}`), W / 2, H / 2 + 3);
+  if (entry.tex) { entry.tex.needsUpdate = true; }
+}
+
 function createCompassLabels() {
-  // +X=East, +Y=Up, +Z=South — camera is on north (-Z) side looking south (+Z)
-  // Compass stays in fixed world positions
-  const dirs = [
-    { letter: 'S', color: '#f59e0b', pos: new THREE.Vector3(0,    0.6, -20) },
-    { letter: 'N', color: '#60a5fa', pos: new THREE.Vector3(0,    0.6,  20) },
-    { letter: 'E', color: '#4ade80', pos: new THREE.Vector3( 20,  0.6,   0) },
-    { letter: 'W', color: '#e879f9', pos: new THREE.Vector3(-20,  0.6,   0) },
-  ];
-
-  for (const d of dirs) {
-    const W = 128, H = 128;
-    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-    const ctx = cv.getContext('2d');
-
-    // Circle background
-    ctx.beginPath(); ctx.arc(W / 2, H / 2, 52, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
-    ctx.strokeStyle = d.color; ctx.lineWidth = 4; ctx.stroke();
-
-    // Letter
-    ctx.fillStyle = d.color;
-    ctx.font = 'bold 64px Segoe UI, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(d.letter, W / 2, H / 2 + 3);
-
-    const tex = new THREE.CanvasTexture(cv);
+  for (const d of _compassEntries) {
+    _drawCompassSprite(d);
+    const tex = new THREE.CanvasTexture(d.canvas);
+    d.tex = tex;
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, sizeAttenuation: true });
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(3, 3, 1);
     sprite.position.copy(d.pos);
-    sprite.name = `compass_${d.letter}`;
+    sprite.name = `compass_${d.key}`;
+    d.sprite = sprite;
     scene.add(sprite);
   }
+  onLanguageChange(() => {
+    _compassEntries.forEach(d => _drawCompassSprite(d));
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Irradiance Heatmap
 // ─────────────────────────────────────────────────────────────────────────────
 let _heatmapMeshes = [];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panel Placement Boundary
+// ─────────────────────────────────────────────────────────────────────────────
+let _boundaryLines = [];
+
+/** Andrew's monotone chain convex hull. Returns CCW polygon. */
+function _convexHull(pts) {
+  if (pts.length < 3) return pts.slice();
+  const p = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower = [];
+  for (const v of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], v) <= 0)
+      lower.pop();
+    lower.push(v);
+  }
+  const upper = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const v = p[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], v) <= 0)
+      upper.pop();
+    upper.push(v);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+
+/** Sutherland-Hodgman clipping of a convex polygon against half-planes. */
+function _clipConvex(poly, halfPlanes) {
+  let result = poly;
+  for (const { px, py, nx, ny } of halfPlanes) {
+    if (!result.length) break;
+    const clipped = [];
+    for (let i = 0; i < result.length; i++) {
+      const a  = result[i];
+      const b  = result[(i + 1) % result.length];
+      const da = (a.x - px) * nx + (a.y - py) * ny;
+      const db = (b.x - px) * nx + (b.y - py) * ny;
+      if (da >= 0) clipped.push(a);
+      if ((da >= 0) !== (db >= 0)) {
+        const t = da / (da - db);
+        clipped.push({ x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
+      }
+    }
+    result = clipped;
+  }
+  return result;
+}
+
+/** Mitered ribbon BufferGeometry for a closed convex polygon. No corner gaps. */
+function _miteredRibbon(polyPts, halfW) {
+  const n = polyPts.length;
+  const vOut = [], vIn = [];
+  for (let i = 0; i < n; i++) {
+    const prev = polyPts[(i - 1 + n) % n];
+    const curr = polyPts[i];
+    const next = polyPts[(i + 1) % n];
+    const e1x = curr.x - prev.x, e1y = curr.y - prev.y;
+    const l1  = Math.sqrt(e1x * e1x + e1y * e1y) || 1;
+    const p1x = -e1y / l1, p1y = e1x / l1;
+    const e2x = next.x - curr.x, e2y = next.y - curr.y;
+    const l2  = Math.sqrt(e2x * e2x + e2y * e2y) || 1;
+    const p2x = -e2y / l2, p2y = e2x / l2;
+    let mx = p1x + p2x, my = p1y + p2y;
+    const ml = Math.sqrt(mx * mx + my * my);
+    if (ml < 1e-6) { mx = p1x; my = p1y; }
+    else           { mx /= ml; my /= ml; }
+    const dot = mx * p1x + my * p1y;
+    const s   = Math.min(Math.abs(dot) > 0.15 ? halfW / dot : halfW * 4, halfW * 4);
+    vOut.push({ x: curr.x + mx * s, y: curr.y + my * s });
+    vIn .push({ x: curr.x - mx * s, y: curr.y - my * s });
+  }
+  const positions = [];
+  const indices   = [];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const b = i * 4;
+    positions.push(
+      vOut[i].x, vOut[i].y, 0,
+      vIn [i].x, vIn [i].y, 0,
+      vOut[j].x, vOut[j].y, 0,
+      vIn [j].x, vIn [j].y, 0,
+    );
+    indices.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setIndex(indices);
+  return geom;
+}
+
+function buildPanelBoundaries() {
+  for (const obj of _boundaryLines) {
+    scene.remove(obj);
+    obj.geometry.dispose();
+    obj.material.dispose();
+  }
+  _boundaryLines = [];
+
+  if (!state.showPanelBoundary) return;
+
+  const RIBBON_HALF = 0.04;
+  const activeFaceIndices = [...state.activeFaces].sort((a, b) => a - b);
+  const tmp = new THREE.Vector3();
+
+  for (const faceIdx of activeFaceIndices) {
+    const face = roofFaces[faceIdx];
+    if (!face || !face.verts2d || face.verts2d.length < 3) continue;
+
+    const facePanels = solarPanels.panels.filter(m => m.userData.face === face);
+    if (!facePanels.length) continue;
+
+    // ── Step 1: convex hull of all panel corners in face-local (r, u) coords ──
+    // Using actual corners (not just centers) means the hull follows the true
+    // panel-array boundary, including diagonal cut-offs near hip edges.
+    const cornerPts = [];
+    for (const panel of facePanels) {
+      tmp.copy(panel.position).sub(face.center);
+      const pr  = tmp.dot(face.rightDir);
+      const pu  = tmp.dot(face.upDir);
+      const hwR = panel.geometry.parameters.width / 2;
+      const hwU = panel.geometry.parameters.depth / 2;
+      cornerPts.push(
+        { x: pr - hwR, y: pu - hwU },
+        { x: pr + hwR, y: pu - hwU },
+        { x: pr + hwR, y: pu + hwU },
+        { x: pr - hwR, y: pu + hwU },
+      );
+    }
+    let boundary = _convexHull(cornerPts);
+    if (boundary.length < 3) continue;
+
+    // ── Step 2: clip hull against face polygon (no inset — hull already hugs panels) ──
+    // This trims any corner that slightly exceeds the roof face on diagonal edges.
+    const verts = face.verts2d;
+    const nv    = verts.length;
+    let cr = 0, cu = 0;
+    for (const v of verts) { cr += v.r; cu += v.u; }
+    cr /= nv; cu /= nv;
+
+    const halfPlanes = [];
+    for (let i = 0; i < nv; i++) {
+      const a  = verts[i];
+      const b  = verts[(i + 1) % nv];
+      const ex = b.r - a.r, ey = b.u - a.u;
+      const len = Math.sqrt(ex * ex + ey * ey);
+      if (len < 1e-6) continue;
+      let nx = -ey / len, ny = ex / len;
+      if ((cr - a.r) * nx + (cu - a.u) * ny < 0) { nx = -nx; ny = -ny; }
+      halfPlanes.push({ px: a.r, py: a.u, nx, ny }); // 0-margin: clip at face edge
+    }
+    boundary = _clipConvex(boundary, halfPlanes);
+    if (boundary.length < 3) continue;
+
+    // ── Step 3: mitered ribbon (no corner gaps) ──
+    const geom = _miteredRibbon(boundary, RIBBON_HALF);
+    geom.computeVertexNormals();
+
+    const mat  = new THREE.MeshBasicMaterial({
+      color: 0xffcc00, transparent: true, opacity: 0.92,
+      depthTest: false, side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+
+    const rotMat = new THREE.Matrix4().makeBasis(face.rightDir, face.upDir, face.normal);
+    mesh.quaternion.setFromRotationMatrix(rotMat);
+    mesh.position.copy(face.center).addScaledVector(face.normal, 0.06);
+    mesh.renderOrder = 1;
+    scene.add(mesh);
+    _boundaryLines.push(mesh);
+  }
+}
 
 /** Build a color (THREE.Color) from 0-1 irradiance value using a rich 7-stop scientific gradient */
 function _irradianceColor(t) {

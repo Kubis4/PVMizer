@@ -125,42 +125,80 @@ function _makeWallTex() {
 }
 
 function _makeRoofTileTex() {
-  const W = 256, H = 256, cv = document.createElement('canvas');
+  const W = 512, H = 512, cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const cx = cv.getContext('2d');
 
-  // Základná červená farba strechy
-  cx.fillStyle = '#8b3a2a'; cx.fillRect(0, 0, W, H);
+  // Tmavé pozadie — medzery medzi taškami
+  cx.fillStyle = '#2e0f08';
+  cx.fillRect(0, 0, W, H);
 
-  // Jednoduché obdĺžnikové tašky - iba fillRect, žiadne krivky
-  const tileW = 32, tileH = 16;
-  const cols = Math.ceil(W / tileW) + 1;
-  const rows = Math.ceil(H / tileH) + 1;
-  const reds = ['#7a3325', '#8b3a2a', '#943f2e', '#7f3528', '#873830', '#923d2c'];
+  const tileW = 64, tileH = 48;
+  const cols = Math.ceil(W / tileW) + 2;
+  const rows = Math.ceil(H / tileH) + 2;
+
+  // Terakotová paleta — prirodzená variácia vypálených tašiek
+  const palette = [
+    [148, 60, 40], [162, 68, 46], [135, 52, 34],
+    [155, 72, 50], [142, 58, 38], [170, 75, 52],
+    [128, 48, 32], [158, 65, 44],
+  ];
 
   for (let r = 0; r < rows; r++) {
     const offX = (r % 2) * (tileW / 2);
     for (let c = 0; c < cols; c++) {
       const x = c * tileW - offX;
       const y = r * tileH;
+      const [br, bg, bb] = palette[(r * 7 + c * 3) % palette.length];
+      const v = (Math.sin(r * 1.9 + c * 2.3) * 0.5 + 0.5) * 18 - 9;
 
-      // Náhodný červený odtieň pre každú tašku
-      cx.fillStyle = reds[(r * 7 + c * 3) % reds.length];
-      cx.fillRect(x + 1, y + 1, tileW - 2, tileH - 2);
+      // Oblúkový profil tašky — gradient simuluje zaoblený tvar
+      const arcGrad = cx.createLinearGradient(x, y, x + tileW, y);
+      const clamp = (val) => Math.max(0, Math.min(255, val));
+      arcGrad.addColorStop(0,    `rgb(${clamp(br*0.55+v)},${clamp(bg*0.55+v)},${clamp(bb*0.55+v)})`);
+      arcGrad.addColorStop(0.18, `rgb(${clamp(br*0.78+v)},${clamp(bg*0.78+v)},${clamp(bb*0.78+v)})`);
+      arcGrad.addColorStop(0.42, `rgb(${clamp(br*1.18+v)},${clamp(bg*1.08+v)},${clamp(bb*1.0+v)})`);
+      arcGrad.addColorStop(0.65, `rgb(${clamp(br*0.95+v)},${clamp(bg*0.92+v)},${clamp(bb*0.88+v)})`);
+      arcGrad.addColorStop(1,    `rgb(${clamp(br*0.6+v)},${clamp(bg*0.6+v)},${clamp(bb*0.6+v)})`);
+      cx.fillStyle = arcGrad;
+      cx.fillRect(x + 1, y + 2, tileW - 2, tileH - 5);
 
-      // Svetlejší horný okraj (1px)
-      cx.fillStyle = 'rgba(180,100,80,0.3)';
-      cx.fillRect(x + 1, y + 1, tileW - 2, 2);
+      // Svetlý vrchol — odraz svetla na hrane tašky
+      const topGrad = cx.createLinearGradient(x, y + 2, x, y + tileH * 0.28);
+      topGrad.addColorStop(0, `rgba(255,210,170,0.32)`);
+      topGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      cx.fillStyle = topGrad;
+      cx.fillRect(x + 1, y + 2, tileW - 2, tileH * 0.28);
 
-      // Tmavší spodný okraj (tieň, 1px)
-      cx.fillStyle = 'rgba(0,0,0,0.25)';
-      cx.fillRect(x + 1, y + tileH - 3, tileW - 2, 2);
+      // Tieň pod presahom — spodná taška vrháva tieň
+      const shadowGrad = cx.createLinearGradient(x, y + tileH * 0.72, x, y + tileH - 3);
+      shadowGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      shadowGrad.addColorStop(1, 'rgba(0,0,0,0.42)');
+      cx.fillStyle = shadowGrad;
+      cx.fillRect(x + 1, y + tileH * 0.72, tileW - 2, tileH * 0.28 - 2);
+
+      // Mach / patina na ~15 % tašiek
+      if ((r * 11 + c * 7) % 13 < 2) {
+        cx.fillStyle = `rgba(${35+Math.random()*20},${75+Math.random()*35},${28+Math.random()*18},${0.18+Math.random()*0.22})`;
+        cx.fillRect(x + 4, y + tileH * 0.35, tileW * 0.55, tileH * 0.38);
+      }
     }
   }
 
+  // Jemný šum pre detailnosť povrchu
+  const imgData = cx.getImageData(0, 0, W, H);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const n = (Math.random() - 0.5) * 14;
+    d[i]     = Math.max(0, Math.min(255, d[i]     + n));
+    d[i + 1] = Math.max(0, Math.min(255, d[i + 1] + n * 0.88));
+    d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + n * 0.78));
+  }
+  cx.putImageData(imgData, 0, 0);
+
   const t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(4, 5);
+  t.repeat.set(3, 4);
   return t;
 }
 
@@ -254,7 +292,7 @@ const wallMat = new THREE.MeshStandardMaterial({
   color: 0xffffff, roughness: 0.85, metalness: 0.0, side: THREE.FrontSide
 });
 const roofMat = new THREE.MeshStandardMaterial({
-  color: 0xffffff, roughness: 0.88, metalness: 0.02, side: THREE.DoubleSide
+  color: 0xffffff, roughness: 0.80, metalness: 0.04, side: THREE.DoubleSide
 });
 const flatRoofMat = new THREE.MeshStandardMaterial({
   color: 0xffffff, roughness: 0.94, metalness: 0.0

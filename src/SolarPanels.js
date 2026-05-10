@@ -9,14 +9,15 @@ import { PANEL_W, PANEL_H } from './EnergyCalc.js';
 
 const PANEL_THICKNESS = 0.04;
 const SURFACE_OFFSET  = 0.025;
-const EDGE_MARGIN     = 0.05;   // safe clearance from roof edges (metres)
+const EDGE_MARGIN     = 0.02;   // safe clearance from roof edges (metres)
 
 /**
- * Convex polygon containment test in 2D.
- * Returns true if (pr, pu) is inside the convex polygon by at least `margin`.
- * Handles triangles and quads.  Winding order is auto-detected via centroid.
+ * Checks whether a rectangular panel (centre pr,pu; half-sides pw/2, ph/2)
+ * fits inside a convex polygon with at least edgeMargin clearance on every edge.
+ * Per-edge margin = edgeMargin + |pw/2·nx| + |ph/2·ny|, which is the exact
+ * clearance needed so every corner of the axis-aligned panel stays inside.
  */
-function insideConvex2D(pr, pu, verts2d, margin) {
+function panelFitsInConvex2D(pr, pu, pw, ph, verts2d, edgeMargin) {
   const n = verts2d.length;
   let cr = 0, cu = 0;
   for (const v of verts2d) { cr += v.r; cu += v.u; }
@@ -28,48 +29,92 @@ function insideConvex2D(pr, pu, verts2d, margin) {
     const ex = b.r - a.r, ey = b.u - a.u;
     const len = Math.sqrt(ex * ex + ey * ey);
     if (len < 1e-6) continue;
-    // Inward normal: perpendicular, oriented toward centroid
     let nx = -ey / len, ny = ex / len;
     if ((cr - a.r) * nx + (cu - a.u) * ny < 0) { nx = -nx; ny = -ny; }
+    // Half-extent of the panel perpendicular to this edge (worst-case corner)
+    const halfExtent = Math.abs(pw / 2 * nx) + Math.abs(ph / 2 * ny);
     const dot = (pr - a.r) * nx + (pu - a.u) * ny;
-    if (dot < margin) return false;
+    if (dot < edgeMargin + halfExtent) return false;
   }
   return true;
 }
 
-// Photovoltaic cell texture (canvas-generated)
+// Photovoltaic cell texture (canvas-generated) — monocrystalline silicon
 let _panelTexture = null;
 function getPanelTexture() {
   if (_panelTexture) return _panelTexture;
 
-  const W = 512, H = 512;
+  const W = 1024, H = 1024;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = '#0d1b4b';
+  // Anti-reflective coating base — deep blue-black
+  ctx.fillStyle = '#060d1c';
   ctx.fillRect(0, 0, W, H);
 
   const cols = 6, rows = 10;
   const cellW = W / cols, cellH = H / rows;
-  const pad = 3;
+  const pad = 7; // encapsulant grid lines
+
+  const clamp = v => Math.max(0, Math.min(255, v));
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const x = c * cellW + pad, y = r * cellH + pad;
-      const cw = cellW - pad * 2, ch = cellH - pad * 2;
-      const grad = ctx.createLinearGradient(x, y, x + cw, y + ch);
-      grad.addColorStop(0,   '#1a2f7a');
-      grad.addColorStop(0.4, '#0d1b5c');
-      grad.addColorStop(1,   '#0a1540');
+      const x = c * cellW + pad;
+      const y = r * cellH + pad;
+      const cw = cellW - pad * 2;
+      const ch = cellH - pad * 2;
+
+      // Per-cell slight variation (simulates wafer-to-wafer differences)
+      const cellVar = Math.sin(r * 2.1 + c * 3.7) * 0.5 + 0.5;
+
+      // Monocrystalline silicon base — dark navy with subtle blue shift
+      const grad = ctx.createLinearGradient(x, y, x + cw * 0.7, y + ch * 0.7);
+      const rb = clamp(6  + cellVar * 8);
+      const gb = clamp(14 + cellVar * 14);
+      const bb = clamp(42 + cellVar * 28);
+      grad.addColorStop(0,   `rgb(${rb+4},${gb+8},${bb+12})`);
+      grad.addColorStop(0.45,`rgb(${rb},${gb},${bb})`);
+      grad.addColorStop(1,   `rgb(${clamp(rb-2)},${clamp(gb-4)},${clamp(bb-8)})`);
       ctx.fillStyle = grad;
       ctx.fillRect(x, y, cw, ch);
-      ctx.fillStyle = 'rgba(100,150,255,0.06)';
-      ctx.fillRect(x, y, cw * 0.4, ch * 0.35);
+
+      // Anti-reflective coating iridescence — thin film interference effect
+      const irid = ctx.createLinearGradient(x, y, x + cw, y + ch * 0.5);
+      irid.addColorStop(0,   `rgba(${40+cellVar*30},${70+cellVar*50},${160+cellVar*40},${0.05+cellVar*0.07})`);
+      irid.addColorStop(0.5, `rgba(20,50,120,0.02)`);
+      irid.addColorStop(1,   `rgba(5,10,40,0.03)`);
+      ctx.fillStyle = irid;
+      ctx.fillRect(x, y, cw, ch);
+
+      // Bus bars — 3 vertical silver conductors per cell
+      ctx.strokeStyle = `rgba(210,220,228,${0.55 + cellVar * 0.1})`;
+      ctx.lineWidth = 2.5;
+      for (let b = 1; b <= 3; b++) {
+        const bx = x + b * cw / 4;
+        ctx.beginPath(); ctx.moveTo(bx, y); ctx.lineTo(bx, y + ch); ctx.stroke();
+        // Busbar highlight
+        ctx.strokeStyle = `rgba(240,248,255,${0.18 + cellVar * 0.08})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(bx - 1, y); ctx.lineTo(bx - 1, y + ch); ctx.stroke();
+        ctx.strokeStyle = `rgba(210,220,228,${0.55 + cellVar * 0.1})`;
+        ctx.lineWidth = 2.5;
+      }
+
+      // Fingers — thin horizontal silver lines (screen-printed contacts)
+      ctx.strokeStyle = `rgba(190,205,215,0.22)`;
+      ctx.lineWidth = 0.6;
+      const numFingers = 14;
+      for (let f = 1; f < numFingers; f++) {
+        const fy = y + f * ch / numFingers;
+        ctx.beginPath(); ctx.moveTo(x, fy); ctx.lineTo(x + cw, fy); ctx.stroke();
+      }
     }
   }
 
-  ctx.strokeStyle = '#4466cc';
+  // Encapsulant grid (EVA resin between cells) — dark blue-grey lines
+  ctx.strokeStyle = 'rgba(4, 8, 20, 0.95)';
   ctx.lineWidth = pad;
   for (let c = 0; c <= cols; c++) {
     ctx.beginPath(); ctx.moveTo(c * cellW, 0); ctx.lineTo(c * cellW, H); ctx.stroke();
@@ -78,15 +123,17 @@ function getPanelTexture() {
     ctx.beginPath(); ctx.moveTo(0, r * cellH); ctx.lineTo(W, r * cellH); ctx.stroke();
   }
 
-  const sheen = ctx.createLinearGradient(0, 0, W, H);
-  sheen.addColorStop(0,   'rgba(120,160,255,0.04)');
-  sheen.addColorStop(0.5, 'rgba(255,255,255,0.02)');
-  sheen.addColorStop(1,   'rgba(0,0,50,0.04)');
-  ctx.fillStyle = sheen;
+  // Tempered glass reflection — subtle diagonal sheen across whole panel
+  const glassSheen = ctx.createLinearGradient(0, 0, W * 0.55, H * 0.55);
+  glassSheen.addColorStop(0,   'rgba(160, 200, 255, 0.07)');
+  glassSheen.addColorStop(0.25,'rgba(100, 150, 220, 0.03)');
+  glassSheen.addColorStop(0.6, 'rgba(0, 10, 40, 0.02)');
+  glassSheen.addColorStop(1,   'rgba(0, 0, 0, 0.04)');
+  ctx.fillStyle = glassSheen;
   ctx.fillRect(0, 0, W, H);
 
   _panelTexture = new THREE.CanvasTexture(canvas);
-  _panelTexture.anisotropy = 8;
+  _panelTexture.anisotropy = 16;
   return _panelTexture;
 }
 
@@ -95,12 +142,18 @@ function getPanelMaterial() {
   if (_panelMat) return _panelMat;
   _panelMat = new THREE.MeshStandardMaterial({
     map: getPanelTexture(),
-    roughness: 0.1, metalness: 0.7, envMapIntensity: 1.0, color: 0xffffff
+    roughness: 0.06,       // tempered glass — very smooth
+    metalness: 0.25,       // semiconductor/glass, nie kov
+    envMapIntensity: 1.8,  // silný odraz okolia cez sklo
+    color: 0xffffff
   });
   return _panelMat;
 }
 
-const frameMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5, metalness: 0.8 });
+// Anodizovaný hliníkový rám
+const frameMat = new THREE.MeshStandardMaterial({
+  color: 0xa8aeb5, roughness: 0.3, metalness: 0.88
+});
 
 /**
  * Returns an iteration order for (row, col) pairs based on fill strategy.
@@ -183,6 +236,7 @@ export class SolarPanels {
       const isMixed = orient === 'alt-rows';
       const pw = isLandscape ? panelH : panelW;
       const ph = isLandscape ? panelW : panelH;
+      const prevCount = this.panels.length;
       this._placePanelsOnFace(
         faces[i], efficiency, gapSize, pw, ph,
         placementMode,
@@ -192,6 +246,10 @@ export class SolarPanels {
         maxPanels, strategy, isMixed ? orient : null, panelW, panelH,
         sideTiltDeg
       );
+      // Tag newly placed panels with their source face for boundary visualization
+      for (let j = prevCount; j < this.panels.length; j++) {
+        this.panels[j].userData.face = faces[i];
+      }
     }
     return this.panels;
   }
@@ -212,7 +270,6 @@ export class SolarPanels {
     const cosT = Math.cos(tiltRad);
     const sinT = Math.sin(tiltRad);
 
-    const polyMargin    = EDGE_MARGIN + Math.min(panelW, panelH) / 2;
     const mat           = getPanelMaterial();
     const area          = panelW * panelH;
     // Height above roof surface to panel center (rises with tilt)
@@ -254,7 +311,7 @@ export class SolarPanels {
 
       const addMesh = (pr, pu, q, pnormal) => {
         if (this.panels.length >= maxPanels) return;
-        if (verts2d && !insideConvex2D(pr, pu, verts2d, polyMargin)) return;
+        if (verts2d && !panelFitsInConvex2D(pr, pu, panelW, panelH, verts2d, EDGE_MARGIN)) return;
         const pos = center.clone()
           .addScaledVector(rightDir, pr)
           .addScaledVector(upDir,    pu)
@@ -379,7 +436,7 @@ export class SolarPanels {
         const pr = startR + c * rd.stepW;
         const pu = rowCenters[r];
 
-        if (verts2d && !insideConvex2D(pr, pu, verts2d, polyMargin)) continue;
+        if (verts2d && !panelFitsInConvex2D(pr, pu, rd.w, rd.h, verts2d, EDGE_MARGIN)) continue;
         if (blockedCells.has(cellIdx)) continue;
         if (placementMode === 'manual' && enabledCells !== null && !enabledCells.has(cellIdx)) continue;
 
@@ -421,7 +478,7 @@ export class SolarPanels {
       const pr = startR + c * stepW;
       const pu = startU + r * stepH;
 
-      if (verts2d && !insideConvex2D(pr, pu, verts2d, polyMargin)) continue;
+      if (verts2d && !panelFitsInConvex2D(pr, pu, panelW, panelH, verts2d, EDGE_MARGIN)) continue;
       if (blockedCells.has(cellIdx)) continue;
       if (placementMode === 'manual' && enabledCells !== null && !enabledCells.has(cellIdx)) continue;
 
