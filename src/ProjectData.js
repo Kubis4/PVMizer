@@ -57,8 +57,4 @@ export class ProjectData {
     return annualSavings * this.lifetime - cost;
   }
 
-  /** CO2 reduction over system lifetime (tonnes) — EU grid avg ~0.275 kg CO2/kWh */
-  getCO2Reduction(annualProductionKwh) {
-    return (annualProductionKwh * this.lifetime * 0.275) / 1000;
-  }
 }

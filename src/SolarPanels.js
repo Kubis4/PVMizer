@@ -9,7 +9,7 @@ import { PANEL_W, PANEL_H } from './EnergyCalc.js';
 
 const PANEL_THICKNESS = 0.04;
 const SURFACE_OFFSET  = 0.025;
-const EDGE_MARGIN     = 0.02;   // safe clearance from roof edges (metres)
+const EDGE_MARGIN     = 0.25;   // 250 mm (~10″) safety setback from roof edges
 
 /**
  * Checks whether a rectangular panel (centre pr,pu; half-sides pw/2, ph/2)
@@ -37,6 +37,72 @@ function panelFitsInConvex2D(pr, pu, pw, ph, verts2d, edgeMargin) {
     if (dot < edgeMargin + halfExtent) return false;
   }
   return true;
+}
+
+/**
+ * Inset a convex polygon (given as verts2d [{r,u}]) by `margin` metres
+ * perpendicular to each edge.  Uses half-plane clipping (same idea as
+ * buildPanelBoundaries).  Returns [{r,u}] or null if the polygon collapses.
+ */
+function insetPolygon(verts2d, margin) {
+  const n = verts2d.length;
+  // Centroid for consistent inward normal orientation
+  let cr = 0, cu = 0;
+  for (const v of verts2d) { cr += v.r; cu += v.u; }
+  cr /= n; cu /= n;
+
+  // Convert to {x,y} for clipping
+  let poly = verts2d.map(v => ({ x: v.r, y: v.u }));
+
+  for (let i = 0; i < n; i++) {
+    const a = verts2d[i], b = verts2d[(i + 1) % n];
+    const ex = b.r - a.r, ey = b.u - a.u;
+    const len = Math.sqrt(ex * ex + ey * ey);
+    if (len < 1e-6) continue;
+    let nx = -ey / len, ny = ex / len;
+    if ((cr - a.r) * nx + (cu - a.u) * ny < 0) { nx = -nx; ny = -ny; }
+    // Shift clipping plane inward by margin
+    const px = a.r + nx * margin, py = a.u + ny * margin;
+    const clipped = [];
+    for (let j = 0; j < poly.length; j++) {
+      const pa = poly[j], pb = poly[(j + 1) % poly.length];
+      const da = (pa.x - px) * nx + (pa.y - py) * ny;
+      const db = (pb.x - px) * nx + (pb.y - py) * ny;
+      if (da >= 0) clipped.push(pa);
+      if ((da >= 0) !== (db >= 0)) {
+        const t = da / (da - db);
+        clipped.push({ x: pa.x + t * (pb.x - pa.x), y: pa.y + t * (pb.y - pa.y) });
+      }
+    }
+    poly = clipped;
+    if (!poly.length) return null;
+  }
+  return poly.length >= 3 ? poly.map(p => ({ r: p.x, u: p.y })) : null;
+}
+
+/**
+ * Returns the horizontal extent {minR, maxR} of a convex polygon at a given
+ * pu height.  Returns null if the polygon doesn't intersect that scanline.
+ */
+function rowExtent(verts2d, pu) {
+  let minR = Infinity, maxR = -Infinity;
+  const n = verts2d.length;
+  for (let i = 0; i < n; i++) {
+    const a = verts2d[i], b = verts2d[(i + 1) % n];
+    if ((a.u - pu) * (b.u - pu) > 0) continue;           // edge doesn't cross pu
+    const du = b.u - a.u;
+    if (Math.abs(du) < 1e-9) {                             // horizontal edge at pu
+      minR = Math.min(minR, a.r, b.r);
+      maxR = Math.max(maxR, a.r, b.r);
+    } else {
+      const t = (pu - a.u) / du;
+      if (t < -1e-9 || t > 1 + 1e-9) continue;
+      const r = a.r + t * (b.r - a.r);
+      minR = Math.min(minR, r);
+      maxR = Math.max(maxR, r);
+    }
+  }
+  return minR < maxR ? { minR, maxR } : null;
 }
 
 // Photovoltaic cell texture (canvas-generated) — monocrystalline silicon
@@ -284,8 +350,11 @@ export class SolarPanels {
       const pairStepR = pairFoot + gapSize;
       const pairStepU = panelW  + gapSize;
 
-      const cols   = Math.max(1, Math.floor(width  / pairStepR));
-      const rows   = Math.max(1, Math.floor(height / pairStepU));
+      const usableW = width  - 2 * EDGE_MARGIN;
+      const usableU = height - 2 * EDGE_MARGIN;
+      if (usableW < pairFoot || usableU < panelW) return;
+      const cols   = Math.max(1, Math.floor((usableW + gapSize) / pairStepR));
+      const rows   = Math.max(1, Math.floor((usableU + gapSize) / pairStepU));
       const totalW = cols * pairStepR - gapSize;
       const totalU = rows * pairStepU - gapSize;
       const startR = -totalW / 2 + pairFoot / 2;
@@ -311,7 +380,7 @@ export class SolarPanels {
 
       const addMesh = (pr, pu, q, pnormal) => {
         if (this.panels.length >= maxPanels) return;
-        if (verts2d && !panelFitsInConvex2D(pr, pu, panelW, panelH, verts2d, EDGE_MARGIN)) return;
+        if (verts2d && !panelFitsInConvex2D(pr, pu, panelW, panelH, verts2d, 0)) return;
         const pos = center.clone()
           .addScaledVector(rightDir, pr)
           .addScaledVector(upDir,    pu)
@@ -376,18 +445,21 @@ export class SolarPanels {
       const pStepH = pH + gapSize;
       const lStepW = lW + gapSize;
       const lStepH = lH + gapSize;
-      const pCols  = Math.max(1, Math.floor(width / pStepW));
-      const lCols  = Math.max(1, Math.floor(width / lStepW));
+      const usableW = width  - 2 * EDGE_MARGIN;
+      const usableH = height - 2 * EDGE_MARGIN;
+      const pCols  = Math.max(1, Math.floor((usableW + gapSize) / pStepW));
+      const lCols  = Math.max(1, Math.floor((usableW + gapSize) / lStepW));
 
-      const maxPortraitRows  = Math.floor(height / pStepH);
-      const maxLandscapeRows = Math.floor(height / lStepH);
+      const maxPortraitRows  = Math.floor((usableH + gapSize) / pStepH);
+      const maxLandscapeRows = Math.floor((usableH + gapSize) / lStepH);
 
       // Evaluate every split: 0..maxPortraitRows portrait + fill rest with landscape
       let bestCount = 0;
       let bestNp = 0, bestNl = 0;
       for (let np = 0; np <= maxPortraitRows; np++) {
         const usedH = np * pStepH;
-        const nl = Math.floor((height - usedH) / lStepH);
+        const remainH = usableH - usedH + gapSize;  // remaining height (+ gap since last row has no trailing gap)
+        const nl = Math.floor(remainH / lStepH);
         const count = np * pCols + nl * lCols;
         if (count > bestCount) { bestCount = count; bestNp = np; bestNl = nl; }
       }
@@ -436,7 +508,7 @@ export class SolarPanels {
         const pr = startR + c * rd.stepW;
         const pu = rowCenters[r];
 
-        if (verts2d && !panelFitsInConvex2D(pr, pu, rd.w, rd.h, verts2d, EDGE_MARGIN)) continue;
+        if (verts2d && !panelFitsInConvex2D(pr, pu, rd.w, rd.h, verts2d, 0)) continue;
         if (blockedCells.has(cellIdx)) continue;
         if (placementMode === 'manual' && enabledCells !== null && !enabledCells.has(cellIdx)) continue;
 
@@ -460,25 +532,61 @@ export class SolarPanels {
     }
 
     // ── Standard uniform grid (portrait / landscape) ──────────────────────
+    // Grid uses the inset polygon (face shrunk by EDGE_MARGIN perpendicular to
+    // each edge) to compute per-row column counts.  This correctly handles
+    // diagonal edges on trapezoidal / triangular faces.
     const stepW = panelW + gapSize;
     const stepH = panelH + gapSize;
 
-    const cols   = Math.max(1, Math.floor(width  / stepW));
-    const rows   = Math.max(1, Math.floor(height / stepH));
-    const totalW = cols * stepW - gapSize;
-    const startR = -totalW / 2 + panelW / 2;
+    // Compute the inset polygon once — this is the usable area for placement
+    const inset = verts2d ? insetPolygon(verts2d, EDGE_MARGIN) : null;
 
-    const totalH = rows * stepH - gapSize;
-    let startU   = -totalH / 2 + panelH / 2;
+    // Usable vertical range from the inset polygon (or fallback to simple margin)
+    let insetMinU = -height / 2 + EDGE_MARGIN, insetMaxU = height / 2 - EDGE_MARGIN;
+    if (inset) {
+      insetMinU = Infinity; insetMaxU = -Infinity;
+      for (const v of inset) { insetMinU = Math.min(insetMinU, v.u); insetMaxU = Math.max(insetMaxU, v.u); }
+    }
+    const usableH = insetMaxU - insetMinU;
+    if (usableH < panelH) return;                         // face too short
 
-    const southOrder = getIterationOrder(fillStrategy, rows, cols);
+    // N panels need N*panelH + (N-1)*gap = N*stepH - gap, so N = floor((usableH+gap)/stepH)
+    const rows   = Math.max(1, Math.floor((usableH + gapSize) / stepH));
+    // Start from the bottom of the usable area (widest part for triangular faces)
+    const startU = insetMinU + panelH / 2;
+
+    // Max cols (used only for cell-index stride in manual/blocked mode)
+    const maxCols = Math.max(1, Math.floor((width + gapSize) / stepW));
+
+    const southOrder = getIterationOrder(fillStrategy, rows, maxCols);
     for (const [r, c] of southOrder) {
       if (this.panels.length >= maxPanels) return;
-      const cellIdx = r * cols + c;
-      const pr = startR + c * stepW;
       const pu = startU + r * stepH;
 
-      if (verts2d && !panelFitsInConvex2D(pr, pu, panelW, panelH, verts2d, EDGE_MARGIN)) continue;
+      // Per-row column layout from the inset polygon scanline
+      let rowCols, rowStartR;
+      if (inset) {
+        const ext = rowExtent(inset, pu);
+        if (!ext) continue;
+        const rowW = ext.maxR - ext.minR;                  // already inset — no extra subtraction
+        if (rowW < panelW) continue;
+        rowCols  = Math.floor((rowW + gapSize) / stepW);  // last panel has no trailing gap
+        const rTotalW = rowCols * stepW - gapSize;
+        rowStartR = (ext.minR + ext.maxR) / 2 - rTotalW / 2 + panelW / 2;
+      } else {
+        const usableW = width - 2 * EDGE_MARGIN;
+        if (usableW < panelW) return;
+        rowCols  = Math.floor((usableW + gapSize) / stepW);
+        const rTotalW = rowCols * stepW - gapSize;
+        rowStartR = -rTotalW / 2 + panelW / 2;
+      }
+      if (c >= rowCols) continue;
+
+      const pr = rowStartR + c * stepW;
+      const cellIdx = r * maxCols + c;
+
+      // Inset polygon already enforces EDGE_MARGIN; fits check only verifies corners are inside the face
+      if (verts2d && !panelFitsInConvex2D(pr, pu, panelW, panelH, verts2d, 0)) continue;
       if (blockedCells.has(cellIdx)) continue;
       if (placementMode === 'manual' && enabledCells !== null && !enabledCells.has(cellIdx)) continue;
 

@@ -84,11 +84,16 @@ export class EnergyCalc {
    * @param {number} area           Panel area (m²)
    * @returns {number} Power in Watts
    */
-  static calculatePanelPower(poaIrradiance, efficiency, area) {
+  static calculatePanelPower(poaIrradiance, efficiency, area, clipping = false) {
     if (poaIrradiance <= 0) return 0;
     const cellTemp   = AMBIENT_TEMP + (NOCT - 20) * (poaIrradiance / 800);
     const tempFactor = 1 - TEMP_COEFF * (cellTemp - 25);
-    return poaIrradiance * efficiency * area * Math.max(0, tempFactor);
+    let power = poaIrradiance * efficiency * area * Math.max(0, tempFactor);
+    if (clipping) {
+      const nominalWp = efficiency * area * 1000; // STC nominal power
+      power = Math.min(power, nominalWp);
+    }
+    return power;
   }
 
   /**
@@ -99,7 +104,7 @@ export class EnergyCalc {
    * @param {number} elevationDeg
    * @returns {{ totalWatts, panelData: Array<{poa, power, efficiency}> }}
    */
-  static calculateSystemPower(panels, sunVector, ghi, elevationDeg, weatherMultiplier = 1.0) {
+  static calculateSystemPower(panels, sunVector, ghi, elevationDeg, weatherMultiplier = 1.0, clipping = false) {
     let totalWatts = 0;
     const panelData = [];
 
@@ -108,7 +113,7 @@ export class EnergyCalc {
       if (!normal) continue;
       const rawPoa = EnergyCalc.calculatePOA(normal, sunVector, ghi, elevationDeg, shadingFactor);
       const poa    = EnergyCalc.applyWeather(rawPoa, weatherMultiplier);
-      const power  = EnergyCalc.calculatePanelPower(poa, efficiency, area);
+      const power  = EnergyCalc.calculatePanelPower(poa, efficiency, area, clipping);
       totalWatts += power;
       panelData.push({ poa, power, efficiency });
     }
@@ -124,7 +129,7 @@ export class EnergyCalc {
    * @param {Array<{normal, efficiency, area, shadingFactor}>} panelInfos
    * @returns {Array<{hour, power}>}
    */
-  static calculateDayCurve(lat, lon, date, panelInfos, weatherMultiplier = 1.0) {
+  static calculateDayCurve(lat, lon, date, panelInfos, weatherMultiplier = 1.0, clipping = false) {
     const result = [];
     const dstOffset = SunSimulation.getDSTOffset(date, lat, lon);
     for (let h = 0; h <= 24; h += 10 / 60) {
@@ -136,7 +141,7 @@ export class EnergyCalc {
       for (const p of panelInfos) {
         const rawPoa = EnergyCalc.calculatePOA(p.normal, sunV, ghi, pos.elevation, p.shadingFactor || 0);
         const poa = EnergyCalc.applyWeather(rawPoa, weatherMultiplier);
-        watts += EnergyCalc.calculatePanelPower(poa, p.efficiency, p.area);
+        watts += EnergyCalc.calculatePanelPower(poa, p.efficiency, p.area, clipping);
       }
       result.push({ hour: h, power: watts });
     }
@@ -157,7 +162,7 @@ export class EnergyCalc {
    * Calculate monthly energy totals (12 values).
    * Uses ASHRAE representative days for each month.
    */
-  static calculateMonthlyEnergy(lat, lon, year, panelInfos, weatherMultiplier = 1.0, monthlyCorrections = null) {
+  static calculateMonthlyEnergy(lat, lon, year, panelInfos, weatherMultiplier = 1.0, monthlyCorrections = null, clipping = false) {
     const repDayOfMonth = [17, 16, 16, 15, 15, 11, 17, 16, 15, 15, 14, 10];
     const daysInMonth   = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     const monthly = [];
@@ -166,7 +171,7 @@ export class EnergyCalc {
       const correction       = monthlyCorrections ? (monthlyCorrections[m] ?? 1.0) : 1.0;
       const effectiveMultiplier = weatherMultiplier * correction;
       const date     = new Date(year, m, repDayOfMonth[m]);
-      const curve    = EnergyCalc.calculateDayCurve(lat, lon, date, panelInfos, effectiveMultiplier);
+      const curve    = EnergyCalc.calculateDayCurve(lat, lon, date, panelInfos, effectiveMultiplier, clipping);
       const dailyKwh = EnergyCalc.integrateDayCurve(curve);
       monthly.push(dailyKwh * daysInMonth[m]);
     }
@@ -178,8 +183,4 @@ export class EnergyCalc {
     return panelInfos.reduce((sum, p) => sum + p.efficiency * p.area * 1000, 0) / 1000;
   }
 
-  /** CO2 savings (tonnes/year) — EU grid average ~0.275 kg CO2/kWh */
-  static co2Savings(annualKwh) {
-    return (annualKwh * 0.275) / 1000;
-  }
 }

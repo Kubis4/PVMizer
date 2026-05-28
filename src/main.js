@@ -39,7 +39,7 @@ const state = {
   // Panel settings
   panelNominalWp:  440,     // Watts peak per panel (determines efficiency)
   panelEfficiency: 0.20,    // derived: panelNominalWp / (panelW * panelH * 1000)
-  panelGap:        0.10,
+  panelGap:        0.05,
   panelTilt:       15,
   panelSideTilt:   0,      // lateral tilt on pitched roofs (degrees, -30..+30)
   panelWidth:      1.0,
@@ -52,6 +52,9 @@ const state = {
 
   // Face selection — user can click numbered face labels to toggle panels
   activeFaces:     new Set(), // face indices that have panels
+
+  // Inverter clipping — cap displayed power at peak kWp
+  inverterClipping: false,
 
   // Building
   buildingRotation: 0,        // degrees, Y axis
@@ -123,10 +126,11 @@ renderer.shadowMap.enabled   = true;
 renderer.shadowMap.type      = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace    = THREE.SRGBColorSpace;
 renderer.toneMapping         = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.5;
+renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
-scene.fog   = new THREE.FogExp2(0x87ceeb, 0.002);
+// Light fog for depth — color updated dynamically from sky
+scene.fog   = new THREE.FogExp2(0x4a90d9, 0.0008);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
 camera.position.set(18, 14, -22);  // south-east side (−Z = south), looking at south-facing panels
@@ -209,7 +213,7 @@ function setBuildingRotation(deg) {
 const app = {
   state, renderer, scene, camera, sunSim, solarPanels, groundMesh,
   obstacleManager, weatherEffects, helpModal, startupScreen, bloomPass, godRays, composer,
-  setRoofType, rebuildRoof, rebuildPanels, buildPanelBoundaries,
+  setRoofType, rebuildRoof, rebuildPanels, buildPanelBoundaries, recalcDayCurve,
   get boundaryLines() { return _boundaryLines; },
   onLocationChange, setPanelDimensions: applyPanelDimensions,
   updateProjectFinancials,
@@ -233,15 +237,13 @@ const app = {
     obstacleManager.deleteAll();
     const finPanel = document.getElementById('financialSection');
     if (finPanel) finPanel.style.display = 'none';
-    const fillToggle = document.getElementById('fillOrderToggle');
-    if (fillToggle) fillToggle.style.display = 'none';
     const panelCountEl = document.getElementById('panelCountDisplay');
     if (panelCountEl) panelCountEl.style.display = 'none';
     state.manualPanelLimit = 0;
-    const sandboxLimitRow = document.getElementById('sandboxPanelLimitRow');
-    if (sandboxLimitRow) sandboxLimitRow.style.display = '';
-    const sandboxLimitInp = document.getElementById('sandboxPanelLimit');
-    if (sandboxLimitInp) sandboxLimitInp.value = '';
+    const limitSlider = document.getElementById('panelLimitSlider');
+    const limitValEl  = document.getElementById('panelLimitVal');
+    if (limitSlider) limitSlider.value = parseInt(limitSlider.max, 10); // max = ∞
+    if (limitValEl)  limitValEl.textContent = '\u221E';
     const nomWpRow = document.getElementById('panelNominalWpRow');
     if (nomWpRow) nomWpRow.style.display = '';
     const projHeader = document.getElementById('projectNameHeader');
@@ -348,7 +350,7 @@ const app = {
     state.buildingRotation = data.buildingRotation ?? 0;
 
     state.panelNominalWp  = data.panelNominalWp  ?? 440;
-    state.panelGap        = data.panelGap         ?? 0.10;
+    state.panelGap        = data.panelGap         ?? 0.05;
     state.panelTilt       = data.panelTilt        ?? 15;
     state.panelSideTilt   = data.panelSideTilt    ?? 0;
     state.panelWidth      = data.panelWidth       ?? 1.0;
@@ -644,6 +646,23 @@ function rebuildPanels() {
     remWrap.style.display = 'none';
   }
 
+  // Sync panel-limit slider range: max = placed+1 (the +1 position represents ∞)
+  const limitSliderEl = document.getElementById('panelLimitSlider');
+  const limitValEl2   = document.getElementById('panelLimitVal');
+  if (limitSliderEl) {
+    const placed = solarPanels.count;
+    const infPos = Math.max(placed + 1, 2);    // max slider position = "no limit"
+    limitSliderEl.min = 1;
+    limitSliderEl.max = infPos;
+    if (state.manualPanelLimit > 0) {
+      limitSliderEl.value = Math.min(state.manualPanelLimit, infPos - 1);
+      if (limitValEl2) limitValEl2.textContent = String(state.manualPanelLimit);
+    } else {
+      limitSliderEl.value = infPos;            // rightmost = ∞
+      if (limitValEl2) limitValEl2.textContent = '\u221E';
+    }
+  }
+
   if (state.appMode === 'project') updateProjectFinancials();
   buildPanelBoundaries();
 }
@@ -690,17 +709,25 @@ function updateFaceLabels() {
     // Skip faces that cannot receive panels (downward normals or near-vertical end gables)
     if (face.normal.y < -0.05) continue;
 
-    const active = state.activeFaces.has(i);
+    const active   = state.activeFaces.has(i);
+    const selected = state.selectedFace === i;
     const W = 96, H = 96;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d');
 
+    // Three visual states: selected (orange ring), active (blue), inactive (dark)
     ctx.beginPath(); ctx.arc(W / 2, H / 2, 40, 0, Math.PI * 2);
-    ctx.fillStyle = active ? 'rgba(59,130,246,0.85)' : 'rgba(30,30,30,0.75)';
+    ctx.fillStyle = selected ? 'rgba(245,158,11,0.92)'
+                   : active  ? 'rgba(59,130,246,0.85)'
+                   :           'rgba(30,30,30,0.75)';
     ctx.fill();
-    ctx.strokeStyle = active ? '#93c5fd' : '#555'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.strokeStyle = selected ? '#fbbf24'
+                    : active   ? '#93c5fd'
+                    :            '#555';
+    ctx.lineWidth = selected ? 5 : 3;
+    ctx.stroke();
 
-    ctx.fillStyle = active ? '#fff' : '#aaa';
+    ctx.fillStyle = (active || selected) ? '#fff' : '#aaa';
     ctx.font = 'bold 44px Segoe UI, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(String(i + 1), W / 2, H / 2 + 3);
@@ -769,7 +796,7 @@ function recalcDayCurve() {
 
   setTimeout(() => {
     dayCurve = EnergyCalc.calculateDayCurve(
-      state.latitude, state.longitude, state.date, panelInfos, state.weatherMultiplier
+      state.latitude, state.longitude, state.date, panelInfos, state.weatherMultiplier, !!state.inverterClipping
     );
     ui.updateDayCurve(dayCurve, state.timeHours, peakPowerKw);
 
@@ -780,7 +807,7 @@ function recalcDayCurve() {
       const annualMult = state.pvgisCorrections ? 1.0 : state.weatherMultiplier;
       monthlyEnergy = EnergyCalc.calculateMonthlyEnergy(
         state.latitude, state.longitude, state.date.getFullYear(), panelInfos,
-        annualMult, state.pvgisCorrections
+        annualMult, state.pvgisCorrections, !!state.inverterClipping
       );
       ui.updateMonthlyChart(monthlyEnergy);
       if (state.appMode === 'project') updateProjectFinancials();
@@ -818,11 +845,7 @@ function syncUIToState() {
   document.querySelectorAll('.roof-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.roof === state.roofType);
   });
-  // Sync sandbox panel limit input
-  const sandboxLimitInp = document.getElementById('sandboxPanelLimit');
-  if (sandboxLimitInp) {
-    sandboxLimitInp.value = state.manualPanelLimit > 0 ? state.manualPanelLimit : '';
-  }
+  // Sync panel limit slider (will be properly set on next rebuildPanels call)
   // Sync roof-specific UI visibility
   if (ui) ui._updateRoofSpecificUI(state.roofType);
 }
@@ -978,45 +1001,25 @@ function buildPanelBoundaries() {
 
   if (!state.showPanelBoundary) return;
 
-  const RIBBON_HALF = 0.04;
+  const RIBBON_HALF    = 0.04;
+  const SAFETY_MARGIN  = 0.25;  // 250 mm (~10″) setback from roof edges
   const activeFaceIndices = [...state.activeFaces].sort((a, b) => a - b);
-  const tmp = new THREE.Vector3();
 
   for (const faceIdx of activeFaceIndices) {
     const face = roofFaces[faceIdx];
     if (!face || !face.verts2d || face.verts2d.length < 3) continue;
 
-    const facePanels = solarPanels.panels.filter(m => m.userData.face === face);
-    if (!facePanels.length) continue;
-
-    // ── Step 1: convex hull of all panel corners in face-local (r, u) coords ──
-    // Using actual corners (not just centers) means the hull follows the true
-    // panel-array boundary, including diagonal cut-offs near hip edges.
-    const cornerPts = [];
-    for (const panel of facePanels) {
-      tmp.copy(panel.position).sub(face.center);
-      const pr  = tmp.dot(face.rightDir);
-      const pu  = tmp.dot(face.upDir);
-      const hwR = panel.geometry.parameters.width / 2;
-      const hwU = panel.geometry.parameters.depth / 2;
-      cornerPts.push(
-        { x: pr - hwR, y: pu - hwU },
-        { x: pr + hwR, y: pu - hwU },
-        { x: pr + hwR, y: pu + hwU },
-        { x: pr - hwR, y: pu + hwU },
-      );
-    }
-    let boundary = _convexHull(cornerPts);
-    if (boundary.length < 3) continue;
-
-    // ── Step 2: clip hull against face polygon (no inset — hull already hugs panels) ──
-    // This trims any corner that slightly exceeds the roof face on diagonal edges.
+    // ── Step 1: start from the face polygon in local (r, u) coords ──
     const verts = face.verts2d;
     const nv    = verts.length;
     let cr = 0, cu = 0;
     for (const v of verts) { cr += v.r; cu += v.u; }
     cr /= nv; cu /= nv;
 
+    // Convert face verts to {x, y} for the clipping / ribbon utilities
+    let boundary = verts.map(v => ({ x: v.r, y: v.u }));
+
+    // ── Step 2: inset the face polygon by SAFETY_MARGIN using half-planes ──
     const halfPlanes = [];
     for (let i = 0; i < nv; i++) {
       const a  = verts[i];
@@ -1026,7 +1029,12 @@ function buildPanelBoundaries() {
       if (len < 1e-6) continue;
       let nx = -ey / len, ny = ex / len;
       if ((cr - a.r) * nx + (cu - a.u) * ny < 0) { nx = -nx; ny = -ny; }
-      halfPlanes.push({ px: a.r, py: a.u, nx, ny }); // 0-margin: clip at face edge
+      // Shift the clipping plane inward by SAFETY_MARGIN
+      halfPlanes.push({
+        px: a.r + nx * SAFETY_MARGIN,
+        py: a.u + ny * SAFETY_MARGIN,
+        nx, ny,
+      });
     }
     boundary = _clipConvex(boundary, halfPlanes);
     if (boundary.length < 3) continue;
@@ -1348,15 +1356,15 @@ function animate() {
   sunSim.update(state.latitude, state.longitude, state.date, solarTimeHours, state.shadowsEnabled, state.weatherCondition);
 
   // Weather fog density
-  const fogDensityMap = { clear: 0.002, partly_cloudy: 0.003, cloudy: 0.005, rainy: 0.008, snowy: 0.010 };
-  if (scene.fog) scene.fog.density = fogDensityMap[state.weatherCondition] || 0.002;
+  const fogDensityMap = { clear: 0.0008, partly_cloudy: 0.002, cloudy: 0.004, rainy: 0.006, snowy: 0.008 };
+  if (scene.fog) scene.fog.density = fogDensityMap[state.weatherCondition] || 0.0008;
 
   // Weather particle effects
   weatherEffects.update(dtMs);
 
   const { sunPosition, sunVector, irradiance } = sunSim;
   const { totalWatts, panelData } = EnergyCalc.calculateSystemPower(
-    solarPanels.panels, sunVector, irradiance, sunPosition.elevation, state.weatherMultiplier
+    solarPanels.panels, sunVector, irradiance, sunPosition.elevation, state.weatherMultiplier, !!state.inverterClipping
   );
 
   statsThrottle   += dtMs;
@@ -1565,12 +1573,8 @@ function applyMode(mode, projectFormData) {
   if (mode === 'sandbox') state.manualPanelLimit = 0;
 
   // Show/hide mode-specific panel controls
-  const fillToggle = document.getElementById('fillOrderToggle');
-  if (fillToggle) fillToggle.style.display = mode === 'project' ? '' : 'none';
   const panelCountEl = document.getElementById('panelCountDisplay');
   if (panelCountEl) panelCountEl.style.display = mode === 'project' ? '' : 'none';
-  const sandboxLimitRow = document.getElementById('sandboxPanelLimitRow');
-  if (sandboxLimitRow) sandboxLimitRow.style.display = mode === 'sandbox' ? '' : 'none';
 
   // In project mode, panel Wp is locked to the project form value (changing it via
   // slider would silently shift the recommended panel count, confusing the user)

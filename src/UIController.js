@@ -374,6 +374,21 @@ export class UIController {
     if (el) el.textContent = value;
   }
 
+  /** Hide a popup toolbar by adding its hidden class, and deactivate its info-bar button */
+  _hidePopup(toolbarId, hiddenClass, btnId) {
+    const el = document.getElementById(toolbarId);
+    if (el && !el.classList.contains(hiddenClass)) el.classList.add(hiddenClass);
+    document.getElementById(btnId)?.classList.remove('active');
+  }
+
+  /** Hide heatmap legend and reset state */
+  _hideHeatmap() {
+    this.app.state.showHeatmap = false;
+    document.getElementById('heatmapToggleBtn')?.classList.remove('active');
+    const legend = document.getElementById('heatmapLegend');
+    if (legend) legend.classList.add('toolbar-popup-hidden');
+  }
+
   // ─── Events ───────────────────────────────────────────────────────────────
   _initEvents() {
     // Roof type buttons
@@ -443,13 +458,17 @@ export class UIController {
     document.getElementById('showGround')?.addEventListener('change', e => {
       if (this.app.groundMesh) this.app.groundMesh.visible = e.target.checked;
     });
-    // Heatmap toggle button in info bar
+    // Heatmap toggle button in info bar (mutually exclusive with obstacles & weather)
     document.getElementById('heatmapToggleBtn')?.addEventListener('click', () => {
       const on = !this.app.state.showHeatmap;
       this.app.state.showHeatmap = on;
       document.getElementById('heatmapToggleBtn')?.classList.toggle('active', on);
       const legend = document.getElementById('heatmapLegend');
-      if (legend) legend.style.display = on ? '' : 'none';
+      if (legend) legend.classList.toggle('toolbar-popup-hidden', !on);
+      if (on) {
+        this._hidePopup('obstacleToolbar', 'obstacle-hidden', 'obstacleToggleBtn');
+        this._hidePopup('weatherToolbar', 'toolbar-popup-hidden', 'weatherToggleBtn');
+      }
     });
     document.getElementById('autoAdvance')?.addEventListener('change', e => {
       this.app.state.autoAdvance = e.target.checked;
@@ -489,15 +508,24 @@ export class UIController {
       }
     });
 
-    // Panel orientation buttons (global — clears any per-face overrides so it applies uniformly)
+    // Panel orientation buttons — behaviour depends on active face count:
+    // 1 face active  → set that face's orientation directly (per-face override)
+    // multiple faces → set global default + clear all per-face overrides
     document.querySelectorAll('.orientation-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.orientation-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        this.app.state.panelOrientation = btn.dataset.orient;
-        // Clear per-face orientation overrides so global setting takes effect on all faces
-        for (const conf of Object.values(this.app.state.faceConfig)) {
-          delete conf.panelOrientation;
+        const orient = btn.dataset.orient;
+        const st = this.app.state;
+        if (st.activeFaces.size === 1) {
+          const idx = [...st.activeFaces][0];
+          if (!st.faceConfig[idx]) st.faceConfig[idx] = {};
+          st.faceConfig[idx].panelOrientation = orient;
+        } else {
+          st.panelOrientation = orient;
+          for (const conf of Object.values(st.faceConfig)) {
+            delete conf.panelOrientation;
+          }
         }
         this.app.rebuildPanels();
       });
@@ -513,42 +541,20 @@ export class UIController {
       });
     });
 
-    // Fill strategy buttons (global default) — exclude per-face buttons
-    document.querySelectorAll('.fill-btn:not(.face-fill-btn):not(.face-orient-btn)').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.fill-btn:not(.face-fill-btn):not(.face-orient-btn)').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.app.state.fillStrategy = btn.dataset.fill;
-        this.app.rebuildPanels();
-      });
-    });
-
-    // Per-face fill strategy buttons
-    document.querySelectorAll('.face-fill-btn').forEach(btn => {
+    // Per-face orientation buttons
+    document.querySelectorAll('.face-orient-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = this.app.state.selectedFace;
         if (idx === null || idx === undefined) return;
         if (!this.app.state.faceConfig[idx]) this.app.state.faceConfig[idx] = {};
-        this.app.state.faceConfig[idx].fillStrategy = btn.dataset.fill;
-        document.querySelectorAll('.face-fill-btn').forEach(b => b.classList.remove('active'));
+        this.app.state.faceConfig[idx].panelOrientation = btn.dataset.orient;
+        document.querySelectorAll('.face-orient-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.app.rebuildPanels();
       });
     });
 
-    // Per-face reset button
-    document.getElementById('faceConfigReset')?.addEventListener('click', () => {
-      const idx = this.app.state.selectedFace;
-      if (idx === null || idx === undefined) return;
-      delete this.app.state.faceConfig[idx];
-      this.app.rebuildPanels();
-      this.showFaceConfig(idx, this.app.state.faceConfig, null, this.app.state);
-    });
-
-    // Weather selector
-    document.getElementById('weatherSelect')?.addEventListener('change', e => {
-      this.app.setWeather(e.target.value);
-    });
+    // (Weather is now handled via weatherToggleBtn + weather-btn toolbar)
 
     // Obstacle toolbar
     document.querySelectorAll('.obstacle-btn').forEach(btn => {
@@ -604,17 +610,62 @@ export class UIController {
       this.app.rebuildPanels?.();
     });
 
-    // Sandbox panel limit input
-    document.getElementById('sandboxPanelLimit')?.addEventListener('input', e => {
-      const v = parseInt(e.target.value, 10);
-      if (this.app.state) this.app.state.manualPanelLimit = (v > 0) ? v : 0;
+    // Panel limit — slider 1-100 where max value = ∞ (no limit)
+    const limitSlider = document.getElementById('panelLimitSlider');
+    const limitValEl  = document.getElementById('panelLimitVal');
+    limitSlider?.addEventListener('input', e => {
+      const v   = parseInt(e.target.value, 10);
+      const max = parseInt(limitSlider.max, 10);
+      const isInf = v >= max;
+      if (limitValEl) limitValEl.textContent = isInf ? '\u221E' : String(v);
+      if (this.app.state) this.app.state.manualPanelLimit = isInf ? 0 : v;
       this.app.rebuildPanels?.();
     });
-    document.getElementById('clearSandboxLimit')?.addEventListener('click', () => {
-      const inp = document.getElementById('sandboxPanelLimit');
-      if (inp) inp.value = '';
-      if (this.app.state) this.app.state.manualPanelLimit = 0;
-      this.app.rebuildPanels?.();
+
+    // Inverter clipping toggle
+    document.getElementById('inverterClipping')?.addEventListener('change', e => {
+      if (this.app.state) this.app.state.inverterClipping = e.target.checked;
+      this.app.recalcDayCurve?.();
+    });
+
+    // Obstacle toolbar toggle (mutually exclusive with heatmap & weather)
+    document.getElementById('obstacleToggleBtn')?.addEventListener('click', () => {
+      const toolbar = document.getElementById('obstacleToolbar');
+      if (!toolbar) return;
+      const wasHidden = toolbar.classList.contains('obstacle-hidden');
+      toolbar.classList.toggle('obstacle-hidden');
+      document.getElementById('obstacleToggleBtn')?.classList.toggle('active', wasHidden);
+      if (wasHidden) {
+        this._hideHeatmap();
+        this._hidePopup('weatherToolbar', 'toolbar-popup-hidden', 'weatherToggleBtn');
+      }
+    });
+
+    // Weather toolbar toggle (mutually exclusive with heatmap & obstacles)
+    document.getElementById('weatherToggleBtn')?.addEventListener('click', () => {
+      const toolbar = document.getElementById('weatherToolbar');
+      if (!toolbar) return;
+      const wasHidden = toolbar.classList.contains('toolbar-popup-hidden');
+      toolbar.classList.toggle('toolbar-popup-hidden');
+      document.getElementById('weatherToggleBtn')?.classList.toggle('active', wasHidden);
+      if (wasHidden) {
+        this._hideHeatmap();
+        this._hidePopup('obstacleToolbar', 'obstacle-hidden', 'obstacleToggleBtn');
+      }
+    });
+
+    // Weather button clicks inside toolbar
+    document.querySelectorAll('.weather-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.weather-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const weather = btn.dataset.weather;
+        this.app.setWeather(weather);
+        // Update icon in info bar
+        const iconMap = { clear: '\u2600\uFE0F', partly_cloudy: '\u26C5', cloudy: '\u2601\uFE0F', rainy: '\uD83C\uDF27\uFE0F', snowy: '\uD83C\uDF28\uFE0F' };
+        const iconEl = document.getElementById('weatherIcon');
+        if (iconEl) iconEl.textContent = iconMap[weather] || '\u2600\uFE0F';
+      });
     });
 
     // Help button
@@ -809,26 +860,40 @@ export class UIController {
   }
 
   showFaceConfig(faceIdx, faceConfig, roofFaces, appState) {
-    const panel = document.getElementById('faceConfigPanel');
+    const panel    = document.getElementById('faceConfigPanel');
+    const globalOr = document.getElementById('globalOrientToggle');
     if (!panel) return;
-    if (faceIdx === null || faceIdx === undefined) {
+
+    // Only show per-face config when multiple faces are active
+    const multiface = appState && appState.activeFaces && appState.activeFaces.size > 1;
+    if (faceIdx === null || faceIdx === undefined || !multiface) {
       panel.style.display = 'none';
+      if (globalOr) globalOr.style.display = '';  // show global orientation
+      // When single face: sync global orientation buttons to that face's effective orientation
+      if (appState && appState.activeFaces && appState.activeFaces.size === 1) {
+        const idx = [...appState.activeFaces][0];
+        const conf = faceConfig[idx] || {};
+        const orient = conf.panelOrientation || appState.panelOrientation || 'portrait';
+        document.querySelectorAll('.orientation-btn').forEach(b => {
+          b.classList.toggle('active', orient === b.dataset.orient);
+        });
+      }
       return;
     }
     panel.style.display = '';
-    // Show face name if roofFaces available
+    if (globalOr) globalOr.style.display = 'none';  // hide global orientation (per-face shown instead)
+    // Show face number
     const nameEl = document.getElementById('faceConfigName');
     if (nameEl && roofFaces && roofFaces[faceIdx]) {
-      const orient = roofFaces[faceIdx].orientation;
-      nameEl.textContent = `${faceIdx + 1} (${orient.charAt(0).toUpperCase() + orient.slice(1)})`;
+      nameEl.textContent = `${faceIdx + 1}`;
     } else if (nameEl) {
       nameEl.textContent = `${faceIdx + 1}`;
     }
-    // Highlight active fill strategy buttons based on per-face config or global default
+    // Highlight active orientation buttons based on per-face config or global default
     const conf = faceConfig[faceIdx] || {};
-    const activeFill = conf.fillStrategy || (appState ? appState.fillStrategy : 'bottom-up');
-    document.querySelectorAll('.face-fill-btn').forEach(b => {
-      b.classList.toggle('active', activeFill === b.dataset.fill);
+    const activeOrient = conf.panelOrientation || (appState ? appState.panelOrientation : 'portrait');
+    document.querySelectorAll('.face-orient-btn').forEach(b => {
+      b.classList.toggle('active', activeOrient === b.dataset.orient);
     });
   }
 

@@ -19,18 +19,30 @@ export class SunSimulation {
     this.scene = scene;
     this.renderer = renderer;
 
-    // Sky
+    // Sky (kept for uniform control; not rendered directly — background cubemap used instead)
     this.sky = new Sky();
     this.sky.scale.setScalar(450000);
-    scene.add(this.sky);
+    // Don't add to scene — we render it into a cubemap for scene.background
 
     // Sun mesh (visual sphere)
     this.sunSphere = new THREE.Mesh(
-      new THREE.SphereGeometry(0.8, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xfff5c0 })
+      new THREE.SphereGeometry(1.5, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffffdd })
     );
     this.sunSphere.name = 'sunSphere';
     scene.add(this.sunSphere);
+
+    // PMREM generator for sky-to-background conversion
+    this._pmremGenerator = new THREE.PMREMGenerator(renderer);
+    this._pmremGenerator.compileCubemapShader();
+    this._skyRenderTarget = null;
+    this._skyScene = new THREE.Scene();
+    this._skyCopy = new Sky();
+    this._skyCopy.scale.setScalar(450000);
+    this._skyScene.add(this._skyCopy);
+    this._lastSkyElev = null;
+    this._lastSkyAzim = null;
+    this._lastSkyWeather = null;
 
     // Sun glow (sprite)
     const glowTex = this._createGlowTexture();
@@ -43,7 +55,7 @@ export class SunSimulation {
         depthWrite: false
       })
     );
-    this.sunGlow.scale.setScalar(12);
+    this.sunGlow.scale.setScalar(18);
     scene.add(this.sunGlow);
 
     // Sun trajectory arc
@@ -328,11 +340,11 @@ export class SunSimulation {
 
     // Weather-dependent visual parameters
     const weatherParams = {
-      clear:         { turbidity: 6,  sunFactor: 1.0,  rayleigh: 2,   mie: 0.005, glowOp: 1.0 },
-      partly_cloudy: { turbidity: 8,  sunFactor: 0.7,  rayleigh: 1.5, mie: 0.01,  glowOp: 0.5 },
-      cloudy:        { turbidity: 12, sunFactor: 0.35, rayleigh: 0.8, mie: 0.02,  glowOp: 0.15 },
-      rainy:         { turbidity: 15, sunFactor: 0.20, rayleigh: 0.5, mie: 0.03,  glowOp: 0.05 },
-      snowy:         { turbidity: 10, sunFactor: 0.25, rayleigh: 0.6, mie: 0.025, glowOp: 0.1 },
+      clear:         { turbidity: 2,  sunFactor: 1.0,  rayleigh: 3,   mie: 0.003, glowOp: 1.0 },
+      partly_cloudy: { turbidity: 5,  sunFactor: 0.7,  rayleigh: 2,   mie: 0.01,  glowOp: 0.5 },
+      cloudy:        { turbidity: 10, sunFactor: 0.35, rayleigh: 1,   mie: 0.02,  glowOp: 0.15 },
+      rainy:         { turbidity: 14, sunFactor: 0.20, rayleigh: 0.5, mie: 0.03,  glowOp: 0.05 },
+      snowy:         { turbidity: 8,  sunFactor: 0.25, rayleigh: 0.8, mie: 0.025, glowOp: 0.1 },
     };
     const wp = weatherParams[weatherCondition] || weatherParams.clear;
 
@@ -367,6 +379,28 @@ export class SunSimulation {
     this.hemiLight.color.set(skyColor);
     this.hemiLight.groundColor.set(0x8B7355);
     this.hemiLight.intensity = (isDay ? 0.4 + elevNorm * 0.3 : 0.05) * wp.sunFactor;
+
+    // Render Sky shader into cubemap and set as scene background
+    // Only regenerate when sun position changes noticeably (saves GPU)
+    const elevRound = Math.round(pos.elevation);
+    const azimRound = Math.round(pos.azimuth);
+    if (this._pmremGenerator &&
+        (elevRound !== this._lastSkyElev || azimRound !== this._lastSkyAzim || weatherCondition !== this._lastSkyWeather)) {
+      this._lastSkyElev = elevRound;
+      this._lastSkyAzim = azimRound;
+      this._lastSkyWeather = weatherCondition;
+      // Copy uniforms to the separate sky scene
+      const srcU = this.sky.material.uniforms;
+      const dstU = this._skyCopy.material.uniforms;
+      dstU['turbidity'].value = srcU['turbidity'].value;
+      dstU['rayleigh'].value  = srcU['rayleigh'].value;
+      dstU['mieCoefficient'].value  = srcU['mieCoefficient'].value;
+      dstU['mieDirectionalG'].value = srcU['mieDirectionalG'].value;
+      dstU['sunPosition'].value.copy(srcU['sunPosition'].value);
+      if (this._skyRenderTarget) this._skyRenderTarget.dispose();
+      this._skyRenderTarget = this._pmremGenerator.fromScene(this._skyScene, 0, 0.1, 1000);
+      this.scene.background = this._skyRenderTarget.texture;
+    }
   }
 
   updateTrajectory(lat, lon, date, visible) {
@@ -549,9 +583,9 @@ export class SunSimulation {
   _skyColor(elevDeg) {
     if (elevDeg <= 0)  return new THREE.Color(0x000520);
     if (elevDeg < 5)   return new THREE.Color(0x1a0a00);
-    if (elevDeg < 15)  return new THREE.Color(0x4a3010);
-    if (elevDeg < 30)  return new THREE.Color(0x87ceeb).multiplyScalar(0.5);
-    return new THREE.Color(0x87ceeb);
+    if (elevDeg < 15)  return new THREE.Color(0x3a2510);
+    if (elevDeg < 30)  return new THREE.Color(0x4a90d9).multiplyScalar(0.6);
+    return new THREE.Color(0x4a90d9);
   }
 
   _createGlowTexture() {

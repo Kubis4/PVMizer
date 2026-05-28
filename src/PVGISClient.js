@@ -20,9 +20,12 @@ async function fetchPVGISMonthlyGHI(lat, lon) {
     // Electron path: request goes through Node.js main process — no CORS
     json = await window.electronAPI.fetchPVGIS(lat, lon);
   } else {
-    // Browser fallback
-    const url = `https://re.jrc.ec.europa.eu/api/v5_2/MRcalc?lat=${lat}&lon=${lon}&horirrad=1&outputformat=json&raddatabase=PVGIS-SARAH2`;
-    const res = await fetch(url);
+    // Browser fallback: try SARAH2 first (accurate for Europe/Africa), then ERA5 (global)
+    const base = `https://re.jrc.ec.europa.eu/api/v5_2/MRcalc?lat=${lat}&lon=${lon}&horirrad=1&outputformat=json`;
+    let res = await fetch(`${base}&raddatabase=PVGIS-SARAH2`);
+    if (!res.ok) {
+      res = await fetch(`${base}&raddatabase=PVGIS-ERA5`);
+    }
     if (!res.ok) throw new Error(`PVGIS HTTP ${res.status}`);
     json = await res.json();
   }
@@ -70,7 +73,14 @@ export async function fetchPVGISCorrections(lat, lon, year) {
     fetchPVGISMonthlyGHI(lat, lon),
     Promise.resolve(computeClearSkyMonthlyGHI(lat, lon, year)),
   ]);
-  return pvgisGHI.map((pvgis, i) =>
-    clearSkyGHI[i] > 0 ? pvgis / clearSkyGHI[i] : 1.0
-  );
+  const corrections = pvgisGHI.map((pvgis, i) => {
+    const factor = clearSkyGHI[i] > 0 ? pvgis / clearSkyGHI[i] : 1.0;
+    // Cap at 1.0: real climate should never exceed clear-sky model
+    return Math.min(factor, 1.0);
+  });
+  console.log(`PVGIS corrections (${lat.toFixed(1)}°, ${lon.toFixed(1)}°):`,
+    corrections.map(c => c.toFixed(3)),
+    'PVGIS GHI:', pvgisGHI.map(g => g.toFixed(2)),
+    'Clear-sky GHI:', clearSkyGHI.map(g => g.toFixed(2)));
+  return corrections;
 }

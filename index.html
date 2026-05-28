@@ -84,14 +84,14 @@
       <div class="control-row">
         <label data-i18n="label.width">Width</label>
         <div class="slider-group">
-          <input type="range" id="houseWidth" min="5" max="20" value="10" step="0.5">
+          <input type="range" id="houseWidth" min="5" max="40" value="10" step="0.5">
           <span class="value-display" id="houseWidthVal">10.0m</span>
         </div>
       </div>
       <div class="control-row">
         <label data-i18n="label.depth">Depth</label>
         <div class="slider-group">
-          <input type="range" id="houseDepth" min="5" max="20" value="10" step="0.5">
+          <input type="range" id="houseDepth" min="5" max="40" value="10" step="0.5">
           <span class="value-display" id="houseDepthVal">10.0m</span>
         </div>
       </div>
@@ -255,6 +255,13 @@
       </div>
       <!-- Panel customization (always visible) -->
       <div id="customizePanel">
+        <div class="control-row" id="panelLimitRow">
+          <label data-i18n="label.sandboxLimit">Panel Limit</label>
+          <div class="slider-group">
+            <input type="range" id="panelLimitSlider" min="1" max="100" value="100" step="1">
+            <span class="value-display" id="panelLimitVal">&#x221E;</span>
+          </div>
+        </div>
         <div class="control-row">
           <label data-i18n="label.panelWidth">Panel Width</label>
           <div class="slider-group">
@@ -279,33 +286,16 @@
         <div class="control-row">
           <label data-i18n="label.panelGap">Panel Gap</label>
           <div class="slider-group">
-            <input type="range" id="panelGap" min="0.02" max="0.3" value="0.1" step="0.01">
-            <span class="value-display" id="panelGapVal">0.10m</span>
+            <input type="range" id="panelGap" min="0.02" max="0.3" value="0.05" step="0.01">
+            <span class="value-display" id="panelGapVal">0.05m</span>
           </div>
         </div>
-        <!-- Panel orientation toggle -->
-        <div class="placement-toggle" style="margin-top:6px">
+        <!-- Panel orientation toggle (hidden when per-face config is shown) -->
+        <div class="placement-toggle" id="globalOrientToggle" style="margin-top:6px">
           <span class="toggle-label" data-i18n="label.orientation">Orientation</span>
           <div class="placement-pills">
             <button class="orientation-btn active" data-orient="portrait" data-i18n="orient.portrait">Portrait</button>
             <button class="orientation-btn" data-orient="landscape" data-i18n="orient.landscape">Landscape</button>
-          </div>
-        </div>
-        <!-- Panel fill strategy (global default) — hidden in sandbox mode -->
-        <div class="placement-toggle" id="fillOrderToggle" style="margin-top:6px">
-          <span class="toggle-label" data-i18n="label.fillOrder">Fill Order</span>
-          <div class="placement-pills">
-            <button class="fill-btn active" data-fill="bottom-up" data-i18n="fill.bottom">&#x2B06; Bottom</button>
-            <button class="fill-btn" data-fill="top-down" data-i18n="fill.top">&#x2B07; Top</button>
-            <button class="fill-btn" data-fill="center-out" data-i18n="fill.center">&#x25CE; Center</button>
-          </div>
-        </div>
-        <!-- Sandbox panel limit (sandbox mode only) -->
-        <div class="control-row" id="sandboxPanelLimitRow" style="display:none">
-          <label data-i18n="label.sandboxLimit">Panel Limit</label>
-          <div class="slider-group">
-            <input type="number" id="sandboxPanelLimit" min="1" max="9999" step="1" placeholder="&#x221E;" class="sandbox-limit-input">
-            <button id="clearSandboxLimit" title="No limit" class="sandbox-limit-clear-btn">&#x221E;</button>
           </div>
         </div>
         <!-- Panel count display (project mode only) -->
@@ -319,14 +309,12 @@
         <div id="faceConfigPanel" class="face-config-panel" style="display:none">
           <div class="face-config-header">
             <span class="face-config-title"><span data-i18n="label.face">Face</span> <span id="faceConfigName">--</span></span>
-            <button class="face-config-reset" id="faceConfigReset" data-i18n="btn.reset">Reset</button>
           </div>
           <div class="placement-toggle" style="margin-top:4px">
-            <span class="toggle-label" data-i18n="label.fillOrder">Fill Order</span>
+            <span class="toggle-label" data-i18n="label.orientation">Orientation</span>
             <div class="placement-pills">
-              <button class="fill-btn face-fill-btn" data-fill="bottom-up" data-i18n="fill.bottom">Bottom</button>
-              <button class="fill-btn face-fill-btn" data-fill="top-down" data-i18n="fill.top">Top</button>
-              <button class="fill-btn face-fill-btn" data-fill="center-out" data-i18n="fill.center">Center</button>
+              <button class="fill-btn face-orient-btn" data-orient="portrait" data-i18n="orient.portrait">Portrait</button>
+              <button class="fill-btn face-orient-btn" data-orient="landscape" data-i18n="orient.landscape">Landscape</button>
             </div>
           </div>
         </div>
@@ -340,7 +328,6 @@
         <button class="preset-btn active" data-lat="48.3" data-lon="18.1">Nitra, SK</button>
         <button class="preset-btn" data-lat="51.5" data-lon="-0.1">London</button>
         <button class="preset-btn" data-lat="64.1" data-lon="-21.9">Reykjavik</button>
-        <button class="preset-btn" data-lat="40.7" data-lon="-74.0">New York</button>
         <button class="preset-btn" data-lat="-26.2" data-lon="28.0">Johannesburg</button>
         <button class="preset-btn" data-lat="-33.9" data-lon="151.2">Sydney</button>
         <button class="preset-btn" data-lat="25.2" data-lon="55.3">Dubai</button>
@@ -378,17 +365,22 @@
     <!-- Current Output -->
     <section class="section">
       <h3 data-i18n="section.currentPower">Current Power</h3>
-      <div class="stat-card power-card">
-        <div class="stat-main">
-          <span class="stat-value" id="currentPower">0.0</span>
-          <span class="stat-unit">kW</span>
-        </div>
-        <div class="stat-sub">
-          <span id="powerPercent">0%</span> <span data-i18n="label.ofPeak">of peak capacity</span>
-        </div>
-        <div class="power-bar-container">
-          <div class="power-bar" id="powerBar"></div>
-        </div>
+      <div class="stat-main">
+        <span class="stat-value" id="currentPower">0.0</span>
+        <span class="stat-unit">kW</span>
+      </div>
+      <div class="stat-sub">
+        <span id="powerPercent">0%</span> <span data-i18n="label.ofPeak">of peak capacity</span>
+      </div>
+      <div class="power-bar-container">
+        <div class="power-bar" id="powerBar"></div>
+      </div>
+      <div class="toggle-row" style="margin-top:6px">
+        <span style="font-size:11px;color:#aaa;" data-i18n="label.inverterClipping">Inverter clipping</span>
+        <label class="toggle" title="Clip power output to inverter nominal capacity">
+          <input type="checkbox" id="inverterClipping">
+          <span class="toggle-slider"></span>
+        </label>
       </div>
     </section>
 
@@ -489,7 +481,7 @@
   </div>
 
   <!-- Obstacle Toolbar (above info bar) -->
-  <div class="obstacle-toolbar" id="obstacleToolbar">
+  <div class="obstacle-toolbar obstacle-hidden" id="obstacleToolbar">
     <!-- Controls row: appears above buttons when an obstacle is selected -->
     <div class="obstacle-controls-row" id="obstacleControlsRow" style="display:none">
       <div id="obstacleSizeRow" class="obstacle-size-row" style="display:none">
@@ -526,6 +518,18 @@
     </div>
   </div>
 
+  <!-- Weather Toolbar (above info bar) -->
+  <div class="toolbar-popup toolbar-popup-hidden" id="weatherToolbar">
+    <div class="obstacle-buttons-row">
+      <span class="toolbar-label" data-i18n="ib.weather">Weather</span>
+      <button class="weather-btn active" data-weather="clear" data-i18n-html="weather.clear">&#x2600;&#xFE0F; Clear</button>
+      <button class="weather-btn" data-weather="partly_cloudy" data-i18n-html="weather.partlyCloudy">&#x26C5; Partly Cloudy</button>
+      <button class="weather-btn" data-weather="cloudy" data-i18n-html="weather.cloudy">&#x2601;&#xFE0F; Cloudy</button>
+      <button class="weather-btn" data-weather="rainy" data-i18n-html="weather.rainy">&#x1F327;&#xFE0F; Rainy</button>
+      <button class="weather-btn" data-weather="snowy" data-i18n-html="weather.snowy">&#x1F328;&#xFE0F; Snowy</button>
+    </div>
+  </div>
+
   <!-- Bottom Info Bar -->
   <div class="info-bar" id="infoBar">
     <div class="info-bar-item">
@@ -548,30 +552,29 @@
       <span class="ib-label" data-i18n="ib.panels">Panels</span>
       <span class="ib-value" id="ibPanels">--</span>
     </div>
-    <div class="info-bar-item">
+    <div class="info-bar-item ib-clickable" id="weatherToggleBtn" title="Toggle weather toolbar">
       <span class="ib-label" data-i18n="ib.weather">Weather</span>
-      <select class="ib-weather-select" id="weatherSelect">
-        <option value="clear" data-i18n="weather.clear">&#x2600;&#xFE0F; Clear</option>
-        <option value="partly_cloudy" data-i18n="weather.partlyCloudy">&#x26C5; Partly Cloudy</option>
-        <option value="cloudy" data-i18n="weather.cloudy">&#x2601;&#xFE0F; Cloudy</option>
-        <option value="rainy" data-i18n="weather.rainy">&#x1F327;&#xFE0F; Rainy</option>
-        <option value="snowy" data-i18n="weather.snowy">&#x1F328;&#xFE0F; Snowy</option>
-      </select>
+      <span class="ib-value" id="weatherIcon">&#x2600;&#xFE0F;</span>
     </div>
-    <div class="info-bar-item heatmap-item">
-      <button class="heatmap-btn" id="heatmapToggleBtn" title="Toggle irradiance heatmap">
+    <div class="info-bar-item ib-clickable" id="heatmapToggleBtn" title="Toggle irradiance heatmap">
+      <span class="ib-label" data-i18n="ib.heatmap">Heatmap</span>
+      <span class="ib-value">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="vertical-align:middle">
           <rect x="1" y="1" width="4" height="14" rx="1" fill="#3b82f6"/>
           <rect x="6" y="4" width="4" height="11" rx="1" fill="#f59e0b"/>
           <rect x="11" y="2" width="4" height="13" rx="1" fill="#ef4444"/>
         </svg>
-      </button>
-      <div id="heatmapLegend" class="heatmap-legend-inline" style="display:none">
-        <div class="heatmap-bar"></div>
-        <div class="heatmap-labels">
-          <span data-i18n="heatmap.low">Low</span><span data-i18n="heatmap.mid">Mid</span><span data-i18n="heatmap.high">High</span>
-        </div>
-      </div>
+      </span>
+    </div>
+    <div class="info-bar-item ib-clickable" id="obstacleToggleBtn" title="Toggle obstacle toolbar">
+      <span class="ib-label" data-i18n="ib.obstacles">Obstacles</span>
+      <span class="ib-value">&#x1F6A7;</span>
+    </div>
+  </div>
+  <div id="heatmapLegend" class="heatmap-legend-inline toolbar-popup toolbar-popup-hidden">
+    <div class="heatmap-bar"></div>
+    <div class="heatmap-labels">
+      <span data-i18n="heatmap.low">Low</span><span data-i18n="heatmap.mid">Mid</span><span data-i18n="heatmap.high">High</span>
     </div>
   </div>
 

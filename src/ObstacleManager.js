@@ -78,12 +78,17 @@ export class ObstacleManager {
 
     this._dragObs.position.copy(pos);
     this._dragObs.group.position.copy(pos);
-    this._alignGroupToSurface(this._dragObs.group, this._dragObs.type, hitNormal);
-    // Update stored surface quaternion and normal so spin is re-applied correctly
-    this._dragObs._surfaceQuat   = this._dragObs.group.quaternion.clone();
+    // Compute pure surface alignment quaternion (without any spin)
+    const surfaceQuat = this._computeSurfaceQuat(this._dragObs.type, hitNormal);
+    this._dragObs._surfaceQuat   = surfaceQuat;
     this._dragObs._surfaceNormal = hitNormal.clone();
-    // Re-apply any existing rotation after surface alignment
-    if (this._dragObs.rotationY) this.setSelectedRotation(this._dragObs.rotationY);
+    // Apply surface alignment + existing rotation
+    this._dragObs.group.quaternion.copy(surfaceQuat);
+    if (this._dragObs.rotationY) {
+      const spin = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(0, this._dragObs.rotationY * Math.PI / 180, 0));
+      this._dragObs.group.quaternion.multiply(spin);
+    }
     return true;
   }
 
@@ -180,16 +185,22 @@ export class ObstacleManager {
   }
 
   // ─── Obstacle operations ─────────────────────────────────────────────────
-  // Rotate group so its local +Y aligns with hitNormal (skip for chimney/tree/pole)
-  _alignGroupToSurface(group, type, hitNormal) {
-    if (['chimney', 'tree', 'leaftree', 'pole'].includes(type)) return;
+  // Compute pure surface alignment quaternion (without modifying any group)
+  _computeSurfaceQuat(type, hitNormal) {
+    if (['chimney', 'tree', 'leaftree', 'pole'].includes(type)) {
+      return new THREE.Quaternion(); // identity — these stand upright
+    }
     const up = new THREE.Vector3(0, 1, 0);
     if (hitNormal.dot(up) < 0.9999) {
-      const q = new THREE.Quaternion().setFromUnitVectors(up, hitNormal);
-      group.quaternion.copy(q);
-    } else {
-      group.quaternion.identity();
+      return new THREE.Quaternion().setFromUnitVectors(up, hitNormal);
     }
+    return new THREE.Quaternion();
+  }
+
+  // Rotate group so its local +Y aligns with hitNormal (skip for chimney/tree/pole)
+  _alignGroupToSurface(group, type, hitNormal) {
+    const q = this._computeSurfaceQuat(type, hitNormal);
+    group.quaternion.copy(q);
   }
 
   _placeObstacle(type, position, hitNormal) {

@@ -632,6 +632,18 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 
 .info-bar-item.highlight .ib-value { color: var(--accent); }
 
+.info-bar-item.ib-clickable {
+  cursor: pointer;
+  transition: background 0.2s;
+  border-left: 1px solid var(--border);
+}
+.info-bar-item.ib-clickable:hover {
+  background: rgba(255,255,255,0.06);
+}
+.info-bar-item.ib-clickable.active {
+  background: rgba(245,158,11,0.12);
+}
+
 /* ===== LOADING OVERLAY ===== */
 .loading-overlay {
   position: fixed;
@@ -1254,9 +1266,9 @@ canvas#powerChart, canvas#monthlyChart {
 /* ===== OBSTACLE TOOLBAR ===== */
 .obstacle-toolbar {
   position: fixed;
-  bottom: 70px;
+  bottom: 56px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(1);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1267,6 +1279,16 @@ canvas#powerChart, canvas#monthlyChart {
   backdrop-filter: blur(20px);
   z-index: 99;
   gap: 0;
+  opacity: 1;
+  transform-origin: center bottom;
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.05),
+              opacity 0.3s ease;
+}
+
+.obstacle-toolbar.obstacle-hidden {
+  transform: translateX(-50%) scale(0.85);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .obstacle-buttons-row {
@@ -1526,10 +1548,60 @@ kbd {
   line-height: 1.6;
 }
 
-/* ===== HEATMAP LEGEND (inline next to button) ===== */
+/* ===== SHARED POPUP TOOLBAR (heatmap, weather, etc.) ===== */
+.toolbar-popup {
+  position: fixed;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%) scale(1);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 5px 8px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 99;
+  opacity: 1;
+  transform-origin: center bottom;
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.05),
+              opacity 0.3s ease;
+}
+.toolbar-popup-hidden {
+  transform: translateX(-50%) scale(0.85);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Weather buttons — same style as obstacle buttons */
+.weather-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.weather-btn:hover { background: rgba(255,255,255,0.10); }
+.weather-btn.active {
+  background: rgba(245,158,11,0.15);
+  border-color: rgba(245,158,11,0.5);
+}
+
+/* ===== HEATMAP LEGEND ===== */
 .heatmap-legend-inline {
-  width: 120px;
-  margin-left: 8px;
+  width: 140px;
+  padding: 6px 10px 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 .heatmap-bar {
   height: 8px;
@@ -1933,20 +2005,4 @@ kbd {
   grid-column: 1 / -1;
 }
 
-/* ===== WEATHER SELECTOR IN INFO BAR ===== */
-.ib-weather-select {
-  background: rgba(255,255,255,0.06);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 1px 4px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  outline: none;
-  font-family: inherit;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.3;
-}
-.ib-weather-select:hover { background: rgba(255,255,255,0.1); }
-.ib-weather-select option { background: #1a1f30; color: var(--text); }
+/* (Weather selector CSS removed — now uses toolbar-popup + weather-btn) */

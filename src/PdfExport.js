@@ -86,7 +86,6 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
   const annualSavings  = projectData.getAnnualSavings(annualKwh);
   const payback        = projectData.getPaybackPeriod(peakKwp, annualKwh);
   const lifetimeSavings = projectData.getLifetimeSavings(peakKwp, annualKwh);
-  const co2            = projectData.getCO2Reduction(annualKwh);
   const fmtEur = v => `\u20AC ${v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
   const addPageNumber = (pageNum) => {
@@ -147,7 +146,6 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
     ['Peak Power',         `${peakKwp.toFixed(2)} kWp`],
     ['Annual Production',  `${annualKwh.toLocaleString()} kWh`],
     ['Self-Consumption',   `${selfConsume.toFixed(0)}%`],
-    ['CO\u2082 Reduction', `${co2.toFixed(2)} t/yr`],
     ['System Cost',        fmtEur(systemCost)],
     ['Annual Savings',     fmtEur(annualSavings)],
     ['Payback Period',     payback === Infinity ? 'N/A' : `${payback.toFixed(1)} years`],
@@ -189,7 +187,6 @@ export async function exportProjectPDF(projectData, stats, canvasEl, charts, ren
     ['Annual Production',  `${annualKwh.toLocaleString()} kWh`],
     ['Annual Consumption', `${projectData.annualConsumption.toLocaleString()} kWh`],
     ['Self-Consumption',   `${selfConsume.toFixed(0)}%`],
-    ['CO\u2082 Reduction', `${co2.toFixed(2)} t/yr`],
   ];
   y = drawTable(doc, systemRows, margin, y, contentW);
   y += 6;
